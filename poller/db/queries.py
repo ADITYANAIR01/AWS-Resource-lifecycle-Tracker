@@ -246,19 +246,25 @@ def soft_delete_resources(conn, resource_type: str, resource_ids: list) -> int:
 def run_alert_query(conn, query: str, params: tuple) -> list:
     """
     Execute an alert rule query and return rows as dicts.
-    Uses RealDictCursor so row fields are accessible by name.
-    Handles both empty and non-empty param tuples.
+
+    Tag rules use a tuple containing a tuple (skip_types) and a string (tag_key).
+    Standard rules use a tuple containing integers (threshold days).
+
+    We use proper psycopg2 parameterization via execute() to handle all types
+    safely — never Python string formatting on SQL.
     """
-    with conn.cursor(cursor_factory=RealDictCursor) as cur:
-        if params:
-            # Replace %s placeholders with actual param values
-            # SQL INTERVAL requires the value inside the string itself
-            # We format only the safe integer/tuple values here
-            formatted = query % params
-        else:
-            formatted = query
-        cur.execute(formatted)
-        return [dict(row) for row in cur.fetchall()]
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            if params:
+                cur.execute(query, params)
+            else:
+                cur.execute(query)
+            return [dict(row) for row in cur.fetchall()]
+    except Exception:
+        # Roll back the failed transaction so the connection
+        # is clean for subsequent queries
+        conn.rollback()
+        raise
 
 
 def get_open_alert(
