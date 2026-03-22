@@ -3,9 +3,8 @@ All database read/write operations for the poller.
 
 Rules enforced here:
   - No SQL lives anywhere else in the codebase
-  - Every query uses parameterized placeholders (%s) — never string formatting
+  - Every query uses parameterized placeholders — never string formatting
   - Every function takes a connection as its first argument
-  - Callers get/release connections from the pool
   - JSONB columns always use psycopg2.extras.Json wrapper
 """
 
@@ -14,7 +13,7 @@ from decimal import Decimal
 from typing import Optional
 
 import psycopg2
-from psycopg2.extras import Json
+from psycopg2.extras import Json, RealDictCursor
 
 from utils.logger import get_logger
 
@@ -26,11 +25,7 @@ logger = get_logger("poller.db.queries")
 # =============================================================================
 
 def _make_serializable(obj):
-    """
-    Recursively convert a boto3 API response dict to JSON-serializable types.
-    boto3 returns datetime objects and Decimal values which psycopg2 Json
-    cannot serialize without this conversion.
-    """
+    """Convert boto3 response types to JSON-serializable equivalents."""
     if isinstance(obj, datetime):
         return obj.isoformat()
     elif isinstance(obj, Decimal):
@@ -47,15 +42,6 @@ def _make_serializable(obj):
 # =============================================================================
 
 def acquire_poll_lock(conn) -> bool:
-    """
-    Check if a poll cycle is already running.
-
-    Returns True if safe to proceed.
-    Returns False if another poll is actively running (started < 30 min ago).
-
-    If a stale 'running' record exists (>= 30 min old), mark it failed
-    and proceed — the previous process likely crashed.
-    """
     with conn.cursor() as cur:
         cur.execute("""
             SELECT id, started_at
@@ -74,25 +60,25 @@ def acquire_poll_lock(conn) -> bool:
         if started_at.tzinfo is None:
             started_at = started_at.replace(tzinfo=timezone.utc)
 
-        now = datetime.now(timezone.utc)
+        now         = datetime.now(timezone.utc)
         age_minutes = (now - started_at).total_seconds() / 60
 
         if age_minutes < 30:
             logger.warning(
                 f"Poll cycle already running (run_id={run_id}, "
-                f"started {age_minutes:.1f} min ago) — skipping this cycle"
+                f"started {age_minutes:.1f} min ago) — skipping"
             )
             return False
 
         logger.warning(
-            f"Stale poll lock found (run_id={run_id}, "
-            f"started {age_minutes:.1f} min ago) — marking as failed and proceeding"
+            f"Stale poll lock (run_id={run_id}, {age_minutes:.1f} min ago) "
+            f"— marking failed and proceeding"
         )
         cur.execute("""
             UPDATE poller_runs
             SET status       = 'failed',
                 completed_at = NOW(),
-                error_log    = 'Marked failed by lock cleanup — process likely crashed'
+                error_log    = 'Marked failed by lock cleanup'
             WHERE id = %s
         """, (run_id,))
         conn.commit()
@@ -104,10 +90,6 @@ def acquire_poll_lock(conn) -> bool:
 # =============================================================================
 
 def insert_poller_run(conn) -> int:
-    """
-    Insert a new poller_run row with status 'running'.
-    Returns the new run ID.
-    """
     with conn.cursor() as cur:
         cur.execute("""
             INSERT INTO poller_runs (status, started_at)
@@ -116,7 +98,6 @@ def insert_poller_run(conn) -> int:
         """)
         run_id = cur.fetchone()[0]
         conn.commit()
-        logger.debug(f"Poller run started — run_id={run_id}")
         return run_id
 
 
@@ -132,10 +113,6 @@ def update_poller_run(
     alerts_resolved: int = 0,
     error_log: Optional[str] = None,
 ) -> None:
-    """
-    Update a poller_run record at the end of a poll cycle.
-    status must be: 'success', 'partial_failure', or 'failed'
-    """
     with conn.cursor() as cur:
         cur.execute("""
             UPDATE poller_runs SET
@@ -150,18 +127,11 @@ def update_poller_run(
                 error_log         = %s
             WHERE id = %s
         """, (
-            status,
-            resources_found,
-            resources_new,
-            resources_updated,
-            resources_deleted,
-            alerts_triggered,
-            alerts_resolved,
-            error_log,
-            run_id,
+            status, resources_found, resources_new, resources_updated,
+            resources_deleted, alerts_triggered, alerts_resolved,
+            error_log, run_id,
         ))
         conn.commit()
-        logger.debug(f"Poller run updated — run_id={run_id} status={status}")
 
 
 # =============================================================================
@@ -169,32 +139,15 @@ def update_poller_run(
 # =============================================================================
 
 def insert_or_update_resource(conn, resource: dict) -> str:
-    """
-    Upsert a resource into the resources table.
-
-    INSERT if new. UPDATE if exists.
-    last_modified only changes when state changes — not on every poll.
-
-    Returns 'inserted' or 'updated'.
-    """
     tags_json = Json(resource.get("tags") or {})
 
     with conn.cursor() as cur:
         cur.execute("""
             INSERT INTO resources (
-                resource_id,
-                resource_type,
-                resource_name,
-                account_id,
-                region,
-                state,
-                created_at,
-                first_seen,
-                last_seen,
-                last_modified,
-                tags,
-                estimated_cost_usd,
-                is_active
+                resource_id, resource_type, resource_name,
+                account_id, region, state, created_at,
+                first_seen, last_seen, last_modified,
+                tags, estimated_cost_usd, is_active
             ) VALUES (
                 %s, %s, %s, %s, %s, %s, %s,
                 NOW(), NOW(), NOW(),
@@ -215,14 +168,10 @@ def insert_or_update_resource(conn, resource: dict) -> str:
                 deleted_at         = NULL
             RETURNING (xmax = 0) AS was_inserted
         """, (
-            resource["resource_id"],
-            resource["resource_type"],
-            resource.get("resource_name"),
-            resource["account_id"],
-            resource["region"],
-            resource.get("state"),
-            resource.get("created_at"),
-            tags_json,
+            resource["resource_id"], resource["resource_type"],
+            resource.get("resource_name"), resource["account_id"],
+            resource["region"], resource.get("state"),
+            resource.get("created_at"), tags_json,
             resource.get("estimated_cost_usd", Decimal("0")),
         ))
 
@@ -236,34 +185,19 @@ def insert_or_update_resource(conn, resource: dict) -> str:
 # =============================================================================
 
 def insert_resource_snapshot(conn, resource: dict) -> None:
-    """
-    Insert one snapshot row per resource per poll cycle.
-    Builds the lifecycle timeline shown on the resource detail page.
-    raw_api_response is nulled out after 48 hours by the cleanup job.
-    """
     tags_json = Json(resource.get("tags") or {})
     raw_json  = Json(_make_serializable(resource.get("raw_api_response") or {}))
 
     with conn.cursor() as cur:
         cur.execute("""
             INSERT INTO resource_snapshots (
-                resource_id,
-                resource_type,
-                polled_at,
-                state,
-                tags,
-                estimated_cost_usd,
-                raw_api_response
-            ) VALUES (
-                %s, %s, NOW(), %s, %s, %s, %s
-            )
+                resource_id, resource_type, polled_at,
+                state, tags, estimated_cost_usd, raw_api_response
+            ) VALUES (%s, %s, NOW(), %s, %s, %s, %s)
         """, (
-            resource["resource_id"],
-            resource["resource_type"],
-            resource.get("state"),
-            tags_json,
-            resource.get("estimated_cost_usd", Decimal("0")),
-            raw_json,
+            resource["resource_id"], resource["resource_type"],
+            resource.get("state"), tags_json,
+            resource.get("estimated_cost_usd", Decimal("0")), raw_json,
         ))
         conn.commit()
 
@@ -273,28 +207,15 @@ def insert_resource_snapshot(conn, resource: dict) -> None:
 # =============================================================================
 
 def get_active_resource_ids(conn, resource_type: str) -> set:
-    """
-    Return the set of resource_ids currently marked active in the DB
-    for a given resource_type.
-    Used to detect resources missing from the latest AWS API response.
-    """
     with conn.cursor() as cur:
         cur.execute("""
-            SELECT resource_id
-            FROM resources
-            WHERE resource_type = %s
-              AND is_active = TRUE
+            SELECT resource_id FROM resources
+            WHERE resource_type = %s AND is_active = TRUE
         """, (resource_type,))
-        rows = cur.fetchall()
-        return {row[0] for row in rows}
+        return {row[0] for row in cur.fetchall()}
 
 
 def soft_delete_resources(conn, resource_type: str, resource_ids: list) -> int:
-    """
-    Mark resources as inactive.
-    Called when resources are in the DB but not returned by AWS API.
-    Returns count of rows updated.
-    """
     if not resource_ids:
         return 0
 
@@ -313,7 +234,194 @@ def soft_delete_resources(conn, resource_type: str, resource_ids: list) -> int:
 
         if count > 0:
             logger.info(
-                f"Soft deleted {count} {resource_type} resource(s) "
-                f"no longer present in AWS"
+                f"Soft deleted {count} {resource_type} resource(s)"
             )
         return count
+
+
+# =============================================================================
+# Alert Queries
+# =============================================================================
+
+def run_alert_query(conn, query: str, params: tuple) -> list:
+    """
+    Execute an alert rule query and return rows as dicts.
+    Uses RealDictCursor so row fields are accessible by name.
+    Handles both empty and non-empty param tuples.
+    """
+    with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        if params:
+            # Replace %s placeholders with actual param values
+            # SQL INTERVAL requires the value inside the string itself
+            # We format only the safe integer/tuple values here
+            formatted = query % params
+        else:
+            formatted = query
+        cur.execute(formatted)
+        return [dict(row) for row in cur.fetchall()]
+
+
+def get_open_alert(
+    conn, resource_id: str, resource_type: str, alert_type: str
+) -> Optional[dict]:
+    """
+    Check if an open (unresolved) alert already exists for this
+    resource + alert_type combination.
+    Returns the alert row as a dict, or None if not found.
+    """
+    with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        cur.execute("""
+            SELECT id, alert_type, severity, message
+            FROM alerts
+            WHERE resource_id   = %s
+              AND resource_type = %s
+              AND alert_type    = %s
+              AND resolved_at IS NULL
+            LIMIT 1
+        """, (resource_id, resource_type, alert_type))
+        row = cur.fetchone()
+        return dict(row) if row else None
+
+
+def insert_alert(
+    conn,
+    resource_id: str,
+    resource_type: str,
+    alert_type: str,
+    severity: str,
+    message: str,
+) -> int:
+    """Insert a new alert. Returns the new alert ID."""
+    with conn.cursor() as cur:
+        cur.execute("""
+            INSERT INTO alerts (
+                resource_id, resource_type, alert_type,
+                severity, message, triggered_at, notified, acknowledged
+            ) VALUES (%s, %s, %s, %s, %s, NOW(), FALSE, FALSE)
+            RETURNING id
+        """, (resource_id, resource_type, alert_type, severity, message))
+        alert_id = cur.fetchone()[0]
+        conn.commit()
+        return alert_id
+
+
+def get_open_alerts_by_type(conn, alert_type: str) -> list:
+    """
+    Return all open (unresolved) alerts for a given alert_type.
+    Used by auto-resolve logic.
+    """
+    with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        cur.execute("""
+            SELECT id, resource_id, resource_type,
+                   alert_type, severity, message
+            FROM alerts
+            WHERE alert_type    = %s
+              AND resolved_at IS NULL
+        """, (alert_type,))
+        return [dict(row) for row in cur.fetchall()]
+
+
+def resolve_alert(conn, alert_id: int) -> None:
+    """Mark an alert as resolved."""
+    with conn.cursor() as cur:
+        cur.execute("""
+            UPDATE alerts
+            SET resolved_at = NOW()
+            WHERE id = %s
+        """, (alert_id,))
+        conn.commit()
+
+
+def get_unnotified_alerts(conn) -> list:
+    """
+    Return all alerts where notified=False and resolved_at IS NULL.
+    These need SNS emails sent.
+    Joins to resources table to get name, account_id, region for the message.
+    """
+    with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        cur.execute("""
+            SELECT
+                a.id, a.resource_id, a.resource_type,
+                a.alert_type, a.severity, a.message,
+                r.resource_name, r.account_id, r.region
+            FROM alerts a
+            LEFT JOIN resources r
+                ON  a.resource_id   = r.resource_id
+                AND a.resource_type = r.resource_type
+            WHERE a.notified     = FALSE
+              AND a.resolved_at IS NULL
+            ORDER BY a.triggered_at ASC
+        """)
+        return [dict(row) for row in cur.fetchall()]
+
+
+def mark_alert_notified(conn, alert_id: int) -> None:
+    """Mark an alert as notified after SNS send."""
+    with conn.cursor() as cur:
+        cur.execute("""
+            UPDATE alerts SET notified = TRUE WHERE id = %s
+        """, (alert_id,))
+        conn.commit()
+
+
+def get_unnotified_resolutions(conn) -> list:
+    """
+    Return alerts that were resolved in the last poll cycle
+    and haven't had a resolution notification sent yet.
+    We use acknowledged=FALSE as the proxy for "resolution not yet notified"
+    since we reuse that flag — see mark_resolution_notified().
+    """
+    with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        cur.execute("""
+            SELECT
+                a.id, a.resource_id, a.resource_type,
+                a.alert_type, a.severity, a.message,
+                r.resource_name, r.account_id, r.region
+            FROM alerts a
+            LEFT JOIN resources r
+                ON  a.resource_id   = r.resource_id
+                AND a.resource_type = r.resource_type
+            WHERE a.resolved_at  IS NOT NULL
+              AND a.notified      = TRUE
+              AND a.acknowledged  = FALSE
+              AND a.resolved_at   > NOW() - INTERVAL '5 minutes'
+            ORDER BY a.resolved_at ASC
+        """)
+        return [dict(row) for row in cur.fetchall()]
+
+
+def mark_resolution_notified(conn, alert_id: int) -> None:
+    """
+    Mark that a resolution notification has been sent.
+    We use acknowledged=TRUE as the flag for this.
+    """
+    with conn.cursor() as cur:
+        cur.execute("""
+            UPDATE alerts SET acknowledged = TRUE WHERE id = %s
+        """, (alert_id,))
+        conn.commit()
+
+
+def get_alert_by_id(conn, alert_id: int) -> Optional[dict]:
+    """Fetch a single alert by ID. Used by manage.py."""
+    with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        cur.execute("""
+            SELECT * FROM alerts WHERE id = %s
+        """, (alert_id,))
+        row = cur.fetchone()
+        return dict(row) if row else None
+
+
+def acknowledge_alert(conn, alert_id: int) -> bool:
+    """
+    Mark an alert as acknowledged by the user.
+    Returns True if a row was updated, False if alert not found.
+    """
+    with conn.cursor() as cur:
+        cur.execute("""
+            UPDATE alerts SET acknowledged = TRUE
+            WHERE id = %s AND acknowledged = FALSE
+        """, (alert_id,))
+        updated = cur.rowcount
+        conn.commit()
+        return updated > 0

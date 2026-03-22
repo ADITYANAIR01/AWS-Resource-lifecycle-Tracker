@@ -1,6 +1,6 @@
 """
 AWS Resource Lifecycle Tracker — Poller
-Phase 4: All 10 collectors active + daily cleanup jobs.
+Phase 5: Full poll cycle with alert evaluation and SNS notifications.
 """
 
 import os
@@ -20,6 +20,7 @@ from collectors.elastic_ips import ElasticIPCollector
 from collectors.security_groups import SecurityGroupCollector
 from collectors.iam_users import IAMUserCollector
 from collectors.cloudwatch_alarms import CloudWatchAlarmCollector
+from alerts.evaluator import run_alert_evaluation
 from db.connection import close_pool, get_connection, init_pool, release_connection
 from db.queries import (
     acquire_poll_lock,
@@ -30,6 +31,7 @@ from db.queries import (
     soft_delete_resources,
     update_poller_run,
 )
+from notifier.sns import send_poller_failure
 from utils.cleanup import run_cleanup
 from utils.logger import get_logger
 
@@ -50,20 +52,14 @@ def _get_aws_session():
 
 
 def _get_account_id(session) -> str:
-    sts = session.client("sts")
-    return sts.get_caller_identity()["Account"]
+    return session.client("sts").get_caller_identity()["Account"]
 
 
 def _get_poll_interval() -> int:
-    minutes = int(os.environ.get("POLL_INTERVAL_MINUTES", 60))
-    return minutes * 60
+    return int(os.environ.get("POLL_INTERVAL_MINUTES", 60)) * 60
 
 
 def _get_collectors(session, account_id: str, region: str) -> list:
-    """
-    All 10 collectors registered in order.
-    Each runs independently — failure of one never stops others.
-    """
     return [
         EC2Collector(session, account_id, region),
         EBSVolumeCollector(session, account_id, region),
@@ -80,11 +76,8 @@ def _get_collectors(session, account_id: str, region: str) -> list:
 
 def _run_collector(collector, conn) -> dict:
     counts = {
-        "found":   0,
-        "new":     0,
-        "updated": 0,
-        "deleted": 0,
-        "errors":  [],
+        "found": 0, "new": 0, "updated": 0,
+        "deleted": 0, "errors": [],
     }
     resource_type = collector.RESOURCE_TYPE
 
@@ -112,10 +105,6 @@ def _run_collector(collector, conn) -> dict:
 
         disappeared_ids = db_active_ids - aws_returned_ids
         if disappeared_ids:
-            logger.info(
-                f"{len(disappeared_ids)} {resource_type} resource(s) "
-                f"no longer in AWS — soft deleting"
-            )
             counts["deleted"] = soft_delete_resources(
                 conn, resource_type, list(disappeared_ids)
             )
@@ -146,9 +135,7 @@ def run_poll_cycle(session, account_id: str, region: str) -> None:
         total_deleted = 0
         all_errors    = []
 
-        collectors = _get_collectors(session, account_id, region)
-
-        for collector in collectors:
+        for collector in _get_collectors(session, account_id, region):
             logger.info(f"Running collector: {collector.RESOURCE_TYPE}")
             counts = _run_collector(collector, conn)
 
@@ -160,12 +147,17 @@ def run_poll_cycle(session, account_id: str, region: str) -> None:
 
         if len(all_errors) == 0:
             status = "success"
-        elif len(all_errors) < len(collectors):
+        elif len(all_errors) < len(_get_collectors(session, account_id, region)):
             status = "partial_failure"
         else:
             status = "failed"
 
         error_log = "\n".join(all_errors) if all_errors else None
+
+        # Run alert evaluation after collectors complete
+        alert_counts = {"triggered": 0, "resolved": 0}
+        if status in ("success", "partial_failure"):
+            alert_counts = run_alert_evaluation(conn)
 
         update_poller_run(
             conn,
@@ -175,21 +167,23 @@ def run_poll_cycle(session, account_id: str, region: str) -> None:
             resources_new=total_new,
             resources_updated=total_updated,
             resources_deleted=total_deleted,
+            alerts_triggered=alert_counts["triggered"],
+            alerts_resolved=alert_counts["resolved"],
             error_log=error_log,
         )
 
         logger.info(
             f"Poll cycle complete — run_id={run_id} status={status} "
-            f"found={total_found} new={total_new} "
-            f"updated={total_updated} deleted={total_deleted}"
+            f"found={total_found} new={total_new} updated={total_updated} "
+            f"deleted={total_deleted} alerts_triggered={alert_counts['triggered']} "
+            f"alerts_resolved={alert_counts['resolved']}"
         )
 
         if all_errors:
-            logger.warning(
-                "Collector errors this cycle:\n" + "\n".join(all_errors)
-            )
+            logger.warning("Collector errors:\n" + "\n".join(all_errors))
+            send_poller_failure(status, "\n".join(all_errors))
 
-        # Run cleanup after every successful or partial poll
+        # Run cleanup after successful or partial poll
         if status in ("success", "partial_failure"):
             run_cleanup()
 
@@ -198,9 +192,7 @@ def run_poll_cycle(session, account_id: str, region: str) -> None:
         if run_id is not None:
             try:
                 update_poller_run(
-                    conn,
-                    run_id=run_id,
-                    status="failed",
+                    conn, run_id=run_id, status="failed",
                     error_log=f"Unexpected error: {type(e).__name__}: {e}",
                 )
             except Exception:
@@ -230,27 +222,17 @@ def main() -> None:
         region     = os.environ.get("AWS_REGION", "ap-south-1")
         logger.info(f"AWS session ready — account={account_id} region={region}")
     except Exception as e:
-        logger.error(
-            f"Could not establish AWS session: {e}. "
-            f"On EC2: check IAM Role is attached. "
-            f"Locally: check aws configure."
-        )
+        logger.error(f"Could not establish AWS session: {e}")
         sys.exit(1)
 
     poll_interval = _get_poll_interval()
     logger.info(f"Poll interval: {poll_interval // 60} minutes")
-    logger.info(
-        f"Active collectors: "
-        f"{[c.RESOURCE_TYPE for c in _get_collectors(session, account_id, region)]}"
-    )
 
     while not _shutdown:
         try:
             run_poll_cycle(session, account_id, region)
         except Exception as e:
-            logger.error(
-                f"Unexpected error outside poll cycle: {e}", exc_info=True
-            )
+            logger.error(f"Unexpected error outside poll cycle: {e}", exc_info=True)
 
         logger.info(f"Sleeping {poll_interval // 60} minutes until next poll")
 
