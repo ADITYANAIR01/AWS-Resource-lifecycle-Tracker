@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}Poller Status — AWS Resource Tracker{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <div class="page-title">Poller Status</div>
+    <div class="page-subtitle" id="poller-subtitle">Loading...</div>
+  </div>
+</div>
+
+<div id="last-run-card" style="margin-bottom:24px">
+  <div class="card skeleton" style="height:80px"></div>
+</div>
+
+<div class="table-container">
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Run #</th>
+        <th>Started</th>
+        <th>Duration</th>
+        <th>Found</th>
+        <th>New</th>
+        <th>Updated</th>
+        <th>Deleted</th>
+        <th>Alerts</th>
+        <th>Status</th>
+      </tr>
+    </thead>
+    <tbody id="poller-tbody">
+      <tr><td colspan="9">
+        <div style="padding:16px;display:flex;flex-direction:column;gap:12px">
+          <div class="skeleton skeleton-text" style="width:100%;height:18px"></div>
+          <div class="skeleton skeleton-text" style="width:90%;height:18px"></div>
+          <div class="skeleton skeleton-text" style="width:95%;height:18px"></div>
+        </div>
+      </td></tr>
+    </tbody>
+  </table>
+  <div class="table-footer">
+    <span id="poller-count">Loading...</span>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}<script src="/static/js/poller.js"></script>{% endblock %}

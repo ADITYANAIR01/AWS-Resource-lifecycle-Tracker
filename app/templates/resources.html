@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block title %}Resources — AWS Resource Tracker{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <div class="page-title">Resources</div>
+    <div class="page-subtitle" id="resources-subtitle">Loading...</div>
+  </div>
+</div>
+
+<div class="filter-bar">
+  <select class="filter-select" id="filter-type" onchange="applyFilters()">
+    <option value="">All Types</option>
+    <option value="ec2">EC2</option>
+    <option value="rds">RDS</option>
+    <option value="s3">S3</option>
+    <option value="ebs_volume">EBS Volume</option>
+    <option value="ebs_snapshot">EBS Snapshot</option>
+    <option value="elastic_ip">Elastic IP</option>
+    <option value="security_group">Security Group</option>
+    <option value="iam_user">IAM User</option>
+    <option value="cloudwatch_alarm">CloudWatch Alarm</option>
+    <option value="rds_snapshot">RDS Snapshot</option>
+  </select>
+  <select class="filter-select" id="filter-state" onchange="applyFilters()">
+    <option value="">All States</option>
+    <option value="running">Running</option>
+    <option value="stopped">Stopped</option>
+    <option value="available">Available</option>
+    <option value="in-use">In Use</option>
+    <option value="unused">Unused</option>
+    <option value="associated">Associated</option>
+    <option value="unassociated">Unassociated</option>
+    <option value="active">Active</option>
+    <option value="inactive">Inactive</option>
+  </select>
+  <select class="filter-select" id="filter-region" onchange="applyFilters()">
+    <option value="">All Regions</option>
+    <option value="ap-south-1">ap-south-1</option>
+    <option value="us-east-1">us-east-1</option>
+    <option value="global">global</option>
+  </select>
+  <input type="text" class="search-input" id="search-input"
+         placeholder="Search by name or ID..."
+         oninput="handleSearch(this.value)">
+</div>
+
+<div class="table-container">
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th onclick="sortBy('resource_type')">Type</th>
+        <th onclick="sortBy('resource_name')">Name</th>
+        <th onclick="sortBy('state')">State</th>
+        <th onclick="sortBy('region')">Region</th>
+        <th onclick="sortBy('created_at')">Age</th>
+        <th onclick="sortBy('estimated_cost_usd')">Est. Cost</th>
+        <th>Tags</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody id="resources-tbody">
+      <tr><td colspan="8">
+        <div style="padding:16px;display:flex;flex-direction:column;gap:12px">
+          <div class="skeleton skeleton-text" style="width:100%;height:18px"></div>
+          <div class="skeleton skeleton-text" style="width:90%;height:18px"></div>
+          <div class="skeleton skeleton-text" style="width:95%;height:18px"></div>
+        </div>
+      </td></tr>
+    </tbody>
+  </table>
+  <div class="table-footer" id="resources-footer">
+    <span id="resources-count">Loading...</span>
+    <div class="pagination" id="pagination"></div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}<script src="/static/js/resources.js"></script>{% endblock %}

@@ -1,38 +1,30 @@
-"""
-Poller status route.
-
-GET /api/poller
-    Returns last 20 poller runs with status, counts, and error logs.
-"""
-
-from flask import Blueprint, jsonify
+from flask import Blueprint, jsonify, render_template
 from psycopg2.extras import RealDictCursor
-
 from db.connection import get_connection
 
 poller_bp = Blueprint("poller", __name__)
 
 
+@poller_bp.route("/poller")
+def poller_page():
+    return render_template("poller.html", active_page="poller")
+
+
 @poller_bp.route("/api/poller")
 def get_poller_status():
-    """Last 20 poller runs — status, counts, duration, errors."""
     try:
         conn = get_connection()
-
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute("""
-                SELECT
-                    id, status, started_at, completed_at,
-                    resources_found, resources_new, resources_updated,
-                    resources_deleted, alerts_triggered, alerts_resolved,
-                    error_log,
-                    EXTRACT(EPOCH FROM (completed_at - started_at))
-                        AS duration_seconds
+                SELECT id, status, started_at, completed_at,
+                       resources_found, resources_new, resources_updated,
+                       resources_deleted, alerts_triggered, alerts_resolved,
+                       error_log,
+                       EXTRACT(EPOCH FROM (completed_at - started_at))
+                           AS duration_seconds
                 FROM poller_runs
-                ORDER BY started_at DESC
-                LIMIT 20
+                ORDER BY started_at DESC LIMIT 20
             """)
-
             runs = []
             for row in cur.fetchall():
                 r = dict(row)
@@ -45,6 +37,5 @@ def get_poller_status():
                 runs.append(r)
 
         return jsonify({"runs": runs, "total": len(runs)})
-
     except Exception as e:
         return jsonify({"error": str(e)}), 500

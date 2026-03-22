@@ -19,3 +19,5 @@ All notable changes to this project will be documented here.
 - Phase 5: Alert engine — all alert rules, SNS notifications, deduplication, auto-resolve, tag compliance checks.
 ---
 - Phase 6: Flask dashboard backend — all API routes, auth enforcement, health check
+---
+- Phase 7: full dashboard UI — dark theme, sidebar, 5 pages with server connectivity

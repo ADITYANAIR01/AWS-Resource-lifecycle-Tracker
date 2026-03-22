@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}AWS Resource Tracker{% endblock %}</title>
+  <link rel="stylesheet" href="/static/css/dashboard.css">
+</head>
+<body>
+
+  {% if is_snapshot %}
+  <div class="snapshot-banner">
+    <span>⚠️  Snapshot — Last updated {{ snapshot_time }}</span>
+    <span>This is not live data. Start your EC2 instance for the live dashboard.</span>
+  </div>
+  {% endif %}
+
+  <div class="app-layout">
+    <aside class="sidebar">
+      <div class="sidebar-logo">
+        <div class="logo-icon">⬡</div>
+        <div class="logo-text">
+          <span class="logo-title">AWS TRACKER</span>
+          <span class="logo-version">v0.1.0</span>
+        </div>
+      </div>
+      <div class="sidebar-divider"></div>
+      <nav class="sidebar-nav">
+        <a href="/"          class="nav-item {% if active_page == 'overview'  %}active{% endif %}">
+          <span class="nav-icon">◈</span><span>Overview</span>
+        </a>
+        <a href="/resources" class="nav-item {% if active_page == 'resources' %}active{% endif %}">
+          <span class="nav-icon">⬚</span><span>Resources</span>
+          <span class="nav-badge" id="nav-resources-badge"></span>
+        </a>
+        <a href="/alerts"    class="nav-item {% if active_page == 'alerts'    %}active{% endif %}">
+          <span class="nav-icon">◉</span><span>Alerts</span>
+          <span class="nav-badge" id="nav-alerts-badge"></span>
+        </a>
+        <a href="/poller"    class="nav-item {% if active_page == 'poller'    %}active{% endif %}">
+          <span class="nav-icon">⟳</span><span>Poller Status</span>
+          <span class="nav-status" id="nav-poller-status"></span>
+        </a>
+      </nav>
+      <div class="sidebar-divider"></div>
+      <div class="sidebar-meta">
+        <div class="meta-section">
+          <span class="meta-label">Account</span>
+          <span class="meta-value mono">121490076448</span>
+        </div>
+        <div class="meta-section">
+          <span class="meta-label">Region</span>
+          <span class="meta-value mono">ap-south-1</span>
+        </div>
+        <div class="meta-section">
+          <span class="meta-label">Last Poll</span>
+          <span class="meta-value" id="sidebar-last-poll">—</span>
+        </div>
+      </div>
+    </aside>
+
+    <main class="main-content">
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+
+  <script src="/static/js/utils.js"></script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

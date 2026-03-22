@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}Alerts — AWS Resource Tracker{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <div class="page-title">Alerts</div>
+    <div class="page-subtitle" id="alerts-subtitle">Loading...</div>
+  </div>
+</div>
+
+<div class="filter-bar">
+  <select class="filter-select" id="filter-status" onchange="loadAlerts()">
+    <option value="active">Active</option>
+    <option value="resolved">Resolved</option>
+    <option value="all">All</option>
+  </select>
+  <select class="filter-select" id="filter-severity" onchange="loadAlerts()">
+    <option value="">All Severities</option>
+    <option value="critical">Critical</option>
+    <option value="warning">Warning</option>
+    <option value="info">Info</option>
+  </select>
+  <select class="filter-select" id="filter-type" onchange="loadAlerts()">
+    <option value="">All Types</option>
+    <option value="ec2_long_running">EC2 Long Running</option>
+    <option value="ec2_stopped_too_long">EC2 Stopped Too Long</option>
+    <option value="ebs_unattached">EBS Unattached</option>
+    <option value="elastic_ip_unassociated">Elastic IP Unassociated</option>
+    <option value="security_group_unused">Security Group Unused</option>
+    <option value="rds_stopped_too_long">RDS Stopped Too Long</option>
+    <option value="iam_user_inactive">IAM User Inactive</option>
+    <option value="cloudwatch_alarm_stale">CloudWatch Alarm Stale</option>
+  </select>
+</div>
+
+<div class="table-container">
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Severity</th>
+        <th>Resource</th>
+        <th>Alert Type</th>
+        <th>Triggered</th>
+        <th>Status</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody id="alerts-tbody">
+      <tr><td colspan="6">
+        <div style="padding:16px;display:flex;flex-direction:column;gap:12px">
+          <div class="skeleton skeleton-text" style="width:100%;height:18px"></div>
+          <div class="skeleton skeleton-text" style="width:90%;height:18px"></div>
+        </div>
+      </td></tr>
+    </tbody>
+  </table>
+  <div class="table-footer">
+    <span id="alerts-count">Loading...</span>
+    <div class="pagination" id="alerts-pagination"></div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}<script src="/static/js/alerts.js"></script>{% endblock %}

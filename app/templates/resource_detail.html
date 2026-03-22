@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}Resource Detail — AWS Resource Tracker{% endblock %}
+{% block content %}
+<a href="/resources" class="back-link">← Resources</a>
+
+<div id="resource-header" style="margin-bottom:28px">
+  <div class="skeleton skeleton-text" style="width:300px;height:28px;margin-bottom:8px"></div>
+  <div class="skeleton skeleton-text" style="width:200px;height:18px"></div>
+</div>
+
+<div class="stat-grid" style="margin-bottom:24px">
+  <div class="card"><div class="card-label">Age</div><div class="card-value" id="detail-age" style="font-size:1.4rem">—</div></div>
+  <div class="card"><div class="card-label">Est. Cost</div><div class="card-value mono" id="detail-cost" style="font-size:1.4rem">—</div></div>
+  <div class="card"><div class="card-label">First Seen</div><div class="card-value" id="detail-first" style="font-size:1rem">—</div></div>
+  <div class="card"><div class="card-label">Last Seen</div><div class="card-value" id="detail-last" style="font-size:1rem">—</div></div>
+</div>
+
+<div class="detail-grid">
+  <div style="display:flex;flex-direction:column;gap:20px">
+    <div class="card">
+      <div class="card-accent-line"></div>
+      <div class="section-header">Tags</div>
+      <div id="detail-tags"><div class="skeleton skeleton-text" style="width:80%;height:28px"></div></div>
+    </div>
+    <div class="card">
+      <div class="card-accent-line"></div>
+      <div class="section-header">Alerts for this Resource</div>
+      <div id="detail-alerts"><div class="skeleton skeleton-text" style="width:100%;height:54px"></div></div>
+    </div>
+  </div>
+  <div class="card" style="max-height:600px;overflow-y:auto">
+    <div class="card-accent-line"></div>
+    <div class="section-header">Lifecycle Timeline</div>
+    <div class="timeline" id="detail-timeline">
+      <div class="skeleton skeleton-text" style="width:100%;height:16px;margin-bottom:20px"></div>
+      <div class="skeleton skeleton-text" style="width:85%;height:16px;margin-bottom:20px"></div>
+      <div class="skeleton skeleton-text" style="width:90%;height:16px"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const _PATH = window.location.pathname.split('/');
+  window.RESOURCE_TYPE = _PATH[2] || '';
+  window.RESOURCE_ID   = _PATH.slice(3).join('/') || '';
+</script>
+{% endblock %}
+{% block scripts %}<script src="/static/js/detail.js"></script>{% endblock %}

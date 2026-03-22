@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}Overview — AWS Resource Tracker{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <div class="page-title">Overview</div>
+    <div class="page-subtitle">Your AWS environment at a glance</div>
+  </div>
+</div>
+
+<div class="stat-grid">
+  <div class="card" id="card-resources">
+    <div class="card-accent-line"></div>
+    <div class="card-label">Total Resources</div>
+    <div class="card-value" id="stat-resources">—</div>
+    <div class="card-sub" id="stat-resources-sub">Loading...</div>
+  </div>
+  <div class="card" id="card-alerts">
+    <div class="card-accent-line"></div>
+    <div class="card-label">Active Alerts</div>
+    <div class="card-value" id="stat-alerts">—</div>
+    <div class="card-sub" id="stat-alerts-sub">Loading...</div>
+  </div>
+  <div class="card" id="card-cost">
+    <div class="card-accent-line"></div>
+    <div class="card-label">Est. Total Cost</div>
+    <div class="card-value mono" id="stat-cost">—</div>
+    <div class="card-sub">On-demand pricing only</div>
+  </div>
+  <div class="card" id="card-poll">
+    <div class="card-accent-line"></div>
+    <div class="card-label">Last Poll</div>
+    <div class="card-value" id="stat-poll-status" style="font-size:1.2rem">—</div>
+    <div class="card-sub" id="stat-poll-sub">Loading...</div>
+  </div>
+</div>
+
+<div style="display:grid;grid-template-columns:1.4fr 1fr;gap:20px">
+  <div class="card">
+    <div class="card-accent-line"></div>
+    <div class="section-header">Resources by Type</div>
+    <div id="resource-bars">
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <div class="skeleton skeleton-text" style="width:100%;height:24px"></div>
+        <div class="skeleton skeleton-text" style="width:85%;height:24px"></div>
+        <div class="skeleton skeleton-text" style="width:70%;height:24px"></div>
+      </div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-accent-line"></div>
+    <div class="section-header">Active Alerts</div>
+    <div id="alert-summary">
+      <div class="skeleton skeleton-text" style="width:100%;height:54px;margin-bottom:8px"></div>
+      <div class="skeleton skeleton-text" style="width:100%;height:54px"></div>
+    </div>
+    <div id="view-all-alerts" style="display:none;margin-top:12px">
+      <a href="/alerts" class="btn btn-ghost btn-sm" style="width:100%;justify-content:center">View all alerts →</a>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}<script src="/static/js/overview.js"></script>{% endblock %}
