@@ -1,0 +1,55 @@
+# Environment variables — NEVER commit real credentials
+.env
+
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# AWS credentials — NEVER commit
+.aws/
+*.pem
+*.key
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Docker
+.docker/
+
+# CDK
+cdk.out/
+cdk.context.json
+
+# Logs
+*.log
+logs/
+
+# Node (CDK dependency)
+node_modules/

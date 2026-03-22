@@ -1,0 +1,19 @@
+# Development overrides — use with:
+# docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
+#
+# Adds:
+# - Source code volume mounts (changes reflect without rebuild)
+# - Flask auto-reload
+# - Poller auto-restart on crash (faster feedback loop)
+
+services:
+
+  app:
+    environment:
+      FLASK_DEBUG: "true"
+    volumes:
+      - ./app:/home/appuser/app
+
+  poller:
+    volumes:
+      - ./poller:/home/appuser/poller

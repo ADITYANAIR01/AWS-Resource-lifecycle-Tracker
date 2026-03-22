@@ -1,0 +1,4 @@
+Flask==3.0.3
+psycopg2-binary==2.9.9
+flask-httpauth==4.8.0
+Werkzeug==3.0.2
