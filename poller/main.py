@@ -1,6 +1,6 @@
 """
 AWS Resource Lifecycle Tracker — Poller
-Phase 5: Full poll cycle with alert evaluation and SNS notifications.
+Phase 8: Full poll cycle with static snapshot export to S3.
 """
 
 import os
@@ -31,6 +31,8 @@ from db.queries import (
     soft_delete_resources,
     update_poller_run,
 )
+from export.generator import generate_snapshot
+from export.uploader import upload_snapshot
 from notifier.sns import send_poller_failure
 from utils.cleanup import run_cleanup
 from utils.logger import get_logger
@@ -117,6 +119,47 @@ def _run_collector(collector, conn) -> dict:
     return counts
 
 
+def _run_export(conn) -> None:
+    """
+    Generate static HTML snapshot and upload to S3.
+    Runs after every successful or partial poll cycle.
+    Never raises — export failure must not affect the poll result.
+    """
+    bucket = os.environ.get("S3_SNAPSHOT_BUCKET", "")
+    if not bucket:
+        logger.debug("S3_SNAPSHOT_BUCKET not set — skipping snapshot export")
+        return
+
+    try:
+        logger.info("Generating static snapshot")
+        pages = generate_snapshot(conn)
+
+        if not pages:
+            logger.warning("Snapshot generation produced no pages — skipping upload")
+            return
+
+        # Build the data bundle for JSON export
+        from export.generator import (
+            _query_overview, _query_resources,
+            _query_alerts, _query_poller,
+        )
+        snapshot_data = {
+            "overview":  _query_overview(conn),
+            "resources": _query_resources(conn),
+            "alerts":    _query_alerts(conn),
+            "poller":    _query_poller(conn),
+        }
+
+        success = upload_snapshot(pages, snapshot_data)
+        if success:
+            logger.info("Static snapshot export complete")
+        else:
+            logger.warning("Static snapshot export completed with errors")
+
+    except Exception as e:
+        logger.error(f"Snapshot export failed: {e}", exc_info=True)
+
+
 def run_poll_cycle(session, account_id: str, region: str) -> None:
     conn   = get_connection()
     run_id = None
@@ -137,22 +180,23 @@ def run_poll_cycle(session, account_id: str, region: str) -> None:
         for collector in _get_collectors(session, account_id, region):
             logger.info(f"Running collector: {collector.RESOURCE_TYPE}")
             counts = _run_collector(collector, conn)
-
             total_found   += counts["found"]
             total_new     += counts["new"]
             total_updated += counts["updated"]
             total_deleted += counts["deleted"]
             all_errors    += counts["errors"]
 
+        collectors_count = len(_get_collectors(session, account_id, region))
         if len(all_errors) == 0:
             status = "success"
-        elif len(all_errors) < len(_get_collectors(session, account_id, region)):
+        elif len(all_errors) < collectors_count:
             status = "partial_failure"
         else:
             status = "failed"
 
         error_log = "\n".join(all_errors) if all_errors else None
 
+        # Alert evaluation
         alert_counts = {"triggered": 0, "resolved": 0}
         if status in ("success", "partial_failure"):
             alert_counts = run_alert_evaluation(conn)
@@ -181,8 +225,10 @@ def run_poll_cycle(session, account_id: str, region: str) -> None:
             logger.warning("Collector errors:\n" + "\n".join(all_errors))
             send_poller_failure(status, "\n".join(all_errors))
 
+        # Cleanup + snapshot export after successful or partial poll
         if status in ("success", "partial_failure"):
             run_cleanup()
+            _run_export(conn)
 
     except Exception as e:
         logger.error(f"Unexpected error in poll cycle: {e}", exc_info=True)
@@ -197,6 +243,7 @@ def run_poll_cycle(session, account_id: str, region: str) -> None:
 
     finally:
         release_connection(conn)
+
 
 def main() -> None:
     logger.info("=" * 60)
@@ -222,7 +269,9 @@ def main() -> None:
         sys.exit(1)
 
     poll_interval = _get_poll_interval()
+    bucket = os.environ.get("S3_SNAPSHOT_BUCKET", "not set")
     logger.info(f"Poll interval: {poll_interval // 60} minutes")
+    logger.info(f"Snapshot bucket: {bucket}")
 
     while not _shutdown:
         try:

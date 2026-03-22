@@ -40,6 +40,12 @@ services:
     container_name: lifecycle-tracker-poller
     env_file:
       - .env
+    environment:
+      # Path where app static files are mounted inside the poller container
+      STATIC_DIR: /home/appuser/static
+    volumes:
+      # Mount app static files into poller container for snapshot generation
+      - ./app/static:/home/appuser/static:ro
     depends_on:
       postgres:
         condition: service_healthy
