@@ -56,7 +56,7 @@ async function loadPollerStatus() {
     const hasError = !!run.error_log;
     const rowClass = run.status==='failed'?'state-critical':run.status==='partial_failure'?'state-warning':'';
     return `
-      <tr class="${rowClass}" style="animation:fadeInUp 0.2s ease forwards;animation-delay:${Math.min(i*0.03,0.4)}s;opacity:0"
+      <tr class="${rowClass}" style="animation:fadeInUp 0.2s ease forwards;animation-delay:${Math.min(i*0.03,0.4)}s"
           onclick="${hasError?`toggleErrorLog(${run.id})`:''}">
         <td><span class="mono" style="color:var(--accent)">#${run.id}</span></td>
         <td><span title="${esc(run.started_at)}" style="color:var(--text-secondary);font-size:0.8rem">${formatDate(run.started_at)}</span></td>

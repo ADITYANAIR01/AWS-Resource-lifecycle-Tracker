@@ -78,7 +78,7 @@ function renderTable() {
 
       return `
         <tr class="${stateRowClass(r.state)}"
-            style="animation:fadeInUp 0.2s ease forwards;animation-delay:${Math.min(i*0.02,0.3)}s;opacity:0"
+            style="animation:fadeInUp 0.2s ease forwards;animation-delay:${Math.min(i*0.02,0.3)}s"
             onclick="window.location='/resources/${esc(r.resource_type)}/${esc(r.resource_id)}'">
           <td>${typeBadge(r.resource_type)}</td>
           <td>

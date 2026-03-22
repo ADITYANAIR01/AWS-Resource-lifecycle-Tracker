@@ -41,7 +41,7 @@ function renderAlerts(alerts, meta) {
     const rowOpacity = (isResolved || isAcked) ? 'opacity:0.5;' : '';
     return `
       <tr class="${isResolved?'':(a.severity==='critical'?'state-critical':a.severity==='warning'?'state-warning':'state-info')}"
-          style="${rowOpacity}animation:fadeInUp 0.2s ease forwards;animation-delay:${Math.min(i*0.03,0.3)}s;opacity:0"
+          style="${rowOpacity}animation:fadeInUp 0.2s ease forwards;animation-delay:${Math.min(i*0.03,0.3)}s"
           onclick="toggleAlertMessage(this, ${a.id})">
         <td>${severityBadge(a.severity)}</td>
         <td>

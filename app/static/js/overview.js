@@ -63,7 +63,7 @@ async function loadOverview() {
     const pct = Math.round((t.count / maxCount) * 100);
     return `
       <div class="resource-bar-row" onclick="window.location='/resources?type=${t.resource_type}'"
-           style="animation:fadeInUp 0.3s ease forwards;animation-delay:${i*0.05}s;opacity:0">
+           style="animation:fadeInUp 0.3s ease forwards;animation-delay:${i*0.05}s">
         <span class="bar-label" style="color:${color}">${label}</span>
         <div class="bar-track">
           <div class="bar-fill" data-pct="${pct}"
