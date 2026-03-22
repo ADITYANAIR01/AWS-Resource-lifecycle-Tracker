@@ -154,45 +154,18 @@ def _evaluate_rule(conn, rule: dict) -> tuple:
 def _evaluate_tag_rules(conn) -> tuple:
     """
     Evaluate tag compliance rules.
+    Disabled by default — opt-in via ALERT_TAGS_ENABLED=true in .env.
     One rule per required tag key — all resource types except snapshots.
     Returns (triggered_count, resolved_count).
     """
+    tags_enabled = os.environ.get("ALERT_TAGS_ENABLED", "false").lower() == "true"
+    if not tags_enabled:
+        return 0, 0
+
     triggered = 0
     resolved  = 0
 
     required_tags = _required_tags()
-
-    # Resource types we skip for tag checks — snapshots inherit tags from
-    # their source and companies typically don't tag them directly
-    skip_types = ("ebs_snapshot", "rds_snapshot", "cloudwatch_alarm")
-
-    for tag_key in required_tags:
-        alert_type = f"missing_tag_{tag_key.lower()}"
-
-        tag_rule = {
-            "type":     alert_type,
-            "severity": "warning",
-            "query": """
-                SELECT resource_id, resource_type, resource_name,
-                       account_id, region
-                FROM resources
-                WHERE is_active     = TRUE
-                  AND resource_type NOT IN %s
-                  AND NOT (tags ? %s)
-            """,
-            "get_params": lambda tk=tag_key, st=skip_types: (st, tk),
-            "message_fn": lambda row, tk=tag_key: (
-                f"Resource {row['resource_name']} ({row['resource_type']}) "
-                f"is missing the required tag: {tk}. "
-                f"Untagged resources cannot be attributed to a team or cost center."
-            ),
-        }
-
-        t, r = _evaluate_rule(conn, tag_rule)
-        triggered += t
-        resolved  += r
-
-    return triggered, resolved
 
 
 # ---------------------------------------------------------------------------
