@@ -17,3 +17,5 @@ All notable changes to this project will be documented here.
 - Phase 4: All 10 collectors active — EBS snapshots, RDS instances, RDS snapshots, S3, Elastic IPs, Security Groups, IAM Users, CloudWatch Alarms + daily cleanup jobs.
 ---
 - Phase 5: Alert engine — all alert rules, SNS notifications, deduplication, auto-resolve, tag compliance checks.
+---
+- Phase 6: Flask dashboard backend — all API routes, auth enforcement, health check
