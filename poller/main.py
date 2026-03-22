@@ -1,7 +1,6 @@
 """
 AWS Resource Lifecycle Tracker — Poller
-Phase 3: EC2 + EBS collectors active. Full poll cycle with DB lock,
-run tracking, soft delete, and partial failure handling.
+Phase 4: All 10 collectors active + daily cleanup jobs.
 """
 
 import os
@@ -13,6 +12,14 @@ import boto3
 
 from collectors.ec2 import EC2Collector
 from collectors.ebs_volumes import EBSVolumeCollector
+from collectors.ebs_snapshots import EBSSnapshotCollector
+from collectors.rds_instances import RDSInstanceCollector
+from collectors.rds_snapshots import RDSSnapshotCollector
+from collectors.s3 import S3Collector
+from collectors.elastic_ips import ElasticIPCollector
+from collectors.security_groups import SecurityGroupCollector
+from collectors.iam_users import IAMUserCollector
+from collectors.cloudwatch_alarms import CloudWatchAlarmCollector
 from db.connection import close_pool, get_connection, init_pool, release_connection
 from db.queries import (
     acquire_poll_lock,
@@ -23,6 +30,7 @@ from db.queries import (
     soft_delete_resources,
     update_poller_run,
 )
+from utils.cleanup import run_cleanup
 from utils.logger import get_logger
 
 logger = get_logger("poller.main")
@@ -37,51 +45,40 @@ def _handle_signal(signum, frame):
 
 
 def _get_aws_session():
-    """
-    Create a boto3 session using the configured region.
-    On EC2: credentials come from IAM Role automatically.
-    Locally: credentials come from ~/.aws or environment variables.
-    """
     region = os.environ.get("AWS_REGION", "ap-south-1")
     return boto3.Session(region_name=region)
 
 
 def _get_account_id(session) -> str:
-    """
-    Get the AWS account ID via STS.
-    Confirms AWS connectivity before the poll starts.
-    """
-    sts      = session.client("sts")
-    identity = sts.get_caller_identity()
-    return identity["Account"]
+    sts = session.client("sts")
+    return sts.get_caller_identity()["Account"]
 
 
 def _get_poll_interval() -> int:
-    """Poll interval in seconds. Defaults to 60 minutes."""
     minutes = int(os.environ.get("POLL_INTERVAL_MINUTES", 60))
     return minutes * 60
 
 
 def _get_collectors(session, account_id: str, region: str) -> list:
     """
-    Return the list of collector instances to run each poll cycle.
-    Phase 3: EC2 + EBS only.
-    Phase 4: all remaining collectors added here.
+    All 10 collectors registered in order.
+    Each runs independently — failure of one never stops others.
     """
     return [
         EC2Collector(session, account_id, region),
         EBSVolumeCollector(session, account_id, region),
+        EBSSnapshotCollector(session, account_id, region),
+        RDSInstanceCollector(session, account_id, region),
+        RDSSnapshotCollector(session, account_id, region),
+        S3Collector(session, account_id, region),
+        ElasticIPCollector(session, account_id, region),
+        SecurityGroupCollector(session, account_id, region),
+        IAMUserCollector(session, account_id, region),
+        CloudWatchAlarmCollector(session, account_id, region),
     ]
 
 
 def _run_collector(collector, conn) -> dict:
-    """
-    Run one collector through the full cycle:
-    collect -> upsert -> snapshot -> soft delete.
-
-    Returns counts dict. Never raises — exceptions are caught and
-    returned in counts['errors'] so other collectors still run.
-    """
     counts = {
         "found":   0,
         "new":     0,
@@ -89,17 +86,12 @@ def _run_collector(collector, conn) -> dict:
         "deleted": 0,
         "errors":  [],
     }
-
     resource_type = collector.RESOURCE_TYPE
 
     try:
-        # Get what DB currently thinks is active BEFORE calling AWS
-        # so we can detect disappearances after the API call
-        db_active_ids = get_active_resource_ids(conn, resource_type)
-
-        resources = collector.collect()
-        counts["found"] = len(resources)
-
+        db_active_ids    = get_active_resource_ids(conn, resource_type)
+        resources        = collector.collect()
+        counts["found"]  = len(resources)
         aws_returned_ids = set()
 
         for resource in resources:
@@ -118,17 +110,15 @@ def _run_collector(collector, conn) -> dict:
 
             insert_resource_snapshot(conn, resource)
 
-        # Soft delete resources in DB but missing from AWS response
         disappeared_ids = db_active_ids - aws_returned_ids
         if disappeared_ids:
             logger.info(
                 f"{len(disappeared_ids)} {resource_type} resource(s) "
                 f"no longer in AWS — soft deleting"
             )
-            deleted = soft_delete_resources(
+            counts["deleted"] = soft_delete_resources(
                 conn, resource_type, list(disappeared_ids)
             )
-            counts["deleted"] = deleted
 
     except Exception as e:
         error_msg = f"[{resource_type}] {type(e).__name__}: {e}"
@@ -139,9 +129,6 @@ def _run_collector(collector, conn) -> dict:
 
 
 def run_poll_cycle(session, account_id: str, region: str) -> None:
-    """
-    Execute one complete poll cycle.
-    """
     conn   = get_connection()
     run_id = None
 
@@ -202,6 +189,10 @@ def run_poll_cycle(session, account_id: str, region: str) -> None:
                 "Collector errors this cycle:\n" + "\n".join(all_errors)
             )
 
+        # Run cleanup after every successful or partial poll
+        if status in ("success", "partial_failure"):
+            run_cleanup()
+
     except Exception as e:
         logger.error(f"Unexpected error in poll cycle: {e}", exc_info=True)
         if run_id is not None:
@@ -242,7 +233,7 @@ def main() -> None:
         logger.error(
             f"Could not establish AWS session: {e}. "
             f"On EC2: check IAM Role is attached. "
-            f"Locally: check ~/.aws credentials or environment variables."
+            f"Locally: check aws configure."
         )
         sys.exit(1)
 
