@@ -123,7 +123,6 @@ def run_poll_cycle(session, account_id: str, region: str) -> None:
 
     try:
         if not acquire_poll_lock(conn):
-            release_connection(conn)
             return
 
         run_id = insert_poller_run(conn)
@@ -154,7 +153,6 @@ def run_poll_cycle(session, account_id: str, region: str) -> None:
 
         error_log = "\n".join(all_errors) if all_errors else None
 
-        # Run alert evaluation after collectors complete
         alert_counts = {"triggered": 0, "resolved": 0}
         if status in ("success", "partial_failure"):
             alert_counts = run_alert_evaluation(conn)
@@ -183,7 +181,6 @@ def run_poll_cycle(session, account_id: str, region: str) -> None:
             logger.warning("Collector errors:\n" + "\n".join(all_errors))
             send_poller_failure(status, "\n".join(all_errors))
 
-        # Run cleanup after successful or partial poll
         if status in ("success", "partial_failure"):
             run_cleanup()
 
@@ -200,7 +197,6 @@ def run_poll_cycle(session, account_id: str, region: str) -> None:
 
     finally:
         release_connection(conn)
-
 
 def main() -> None:
     logger.info("=" * 60)
