@@ -15,7 +15,7 @@ GET /api/resources/<resource_type>/<path:resource_id>
 from flask import Blueprint, jsonify, request
 from psycopg2.extras import RealDictCursor
 
-from app.db.connection import get_connection
+from db.connection import get_connection
 
 resources_bp = Blueprint("resources", __name__)
 

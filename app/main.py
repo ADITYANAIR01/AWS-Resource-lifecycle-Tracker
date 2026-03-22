@@ -11,11 +11,11 @@ from flask import Flask, jsonify
 from flask_httpauth import HTTPBasicAuth
 from werkzeug.security import check_password_hash, generate_password_hash
 
-from app.db.connection import close_pool, init_pool, release_connection
-from app.routes.overview import overview_bp
-from app.routes.resources import resources_bp
-from app.routes.alerts import alerts_bp
-from app.routes.poller import poller_bp
+from db.connection import close_pool, init_pool, release_connection
+from routes.overview import overview_bp
+from routes.resources import resources_bp
+from routes.alerts import alerts_bp
+from routes.poller import poller_bp
 
 # ---------------------------------------------------------------------------
 # Logging

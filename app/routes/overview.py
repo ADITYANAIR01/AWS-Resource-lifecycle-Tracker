@@ -11,7 +11,7 @@ Returns summary data:
 from flask import Blueprint, jsonify
 from psycopg2.extras import RealDictCursor
 
-from app.db.connection import get_connection
+from db.connection import get_connection
 
 overview_bp = Blueprint("overview", __name__)
 

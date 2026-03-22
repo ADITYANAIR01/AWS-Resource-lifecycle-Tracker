@@ -8,7 +8,7 @@ GET /api/poller
 from flask import Blueprint, jsonify
 from psycopg2.extras import RealDictCursor
 
-from app.db.connection import get_connection
+from db.connection import get_connection
 
 poller_bp = Blueprint("poller", __name__)
 
