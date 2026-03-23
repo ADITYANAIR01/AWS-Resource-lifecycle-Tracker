@@ -53,3 +53,4 @@ logs/
 
 # Node (CDK dependency)
 node_modules/
+details.txt

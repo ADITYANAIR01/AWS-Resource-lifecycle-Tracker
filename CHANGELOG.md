@@ -21,3 +21,7 @@ All notable changes to this project will be documented here.
 - Phase 6: Flask dashboard backend — all API routes, auth enforcement, health check
 ---
 - Phase 7: full dashboard UI — dark theme, sidebar, 5 pages with server connectivity
+---
+- Phase 8: Static snapshot export to S3 — 4 pages generated after every poll, uploaded to latest/ and archive/, accessible from S3 when EC2 is off
+---
+- Phase 9: Created Cloudfront deployment YAML file for auto provisioning the resources
