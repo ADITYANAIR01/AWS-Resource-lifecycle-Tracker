@@ -1,0 +1,1152 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  AWS Resource Lifecycle Tracker v0.1.0 - Cost-Optimised Scheduled Mode
+  Polls twice a week (Mon + Thu). EC2 and RDS auto-stop after each poll.
+  Elastic IP keeps dashboard URL stable across stop/start cycles.
+  CloudFront SnapshotURL always accessible between polls.
+  Estimated cost after free tier: ~$0.60/month (vs $23/month always-on).
+  Source: https://github.com/ADITYANAIR01/aws-resource-lifecycle-tracker
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: "1. Required - Fill these in"
+        Parameters:
+          - AccountId
+          - AlertEmail
+          - DBPassword
+          - DashboardPassword
+          - EC2KeyPairName
+      - Label:
+          default: "2. Poll Schedule (twice weekly)"
+        Parameters:
+          - ScheduleExpression1
+          - ScheduleExpression2
+          - ScheduleTimezone
+      - Label:
+          default: "3. Poller Settings"
+        Parameters:
+          - PollIntervalMinutes
+          - AlertTagsEnabled
+      - Label:
+          default: "4. Alert Thresholds (days)"
+        Parameters:
+          - AlertEC2RunningDays
+          - AlertEC2StoppedDays
+          - AlertEBSUnattachedDays
+          - AlertRDSStoppedDays
+          - AlertIAMInactiveDays
+      - Label:
+          default: "5. Cleanup Behaviour"
+        Parameters:
+          - RetainDataOnDelete
+      - Label:
+          default: "6. Advanced (optional)"
+        Parameters:
+          - ExistingIAMRoleName
+    ParameterLabels:
+      AccountId:
+          default: "Your AWS Account ID (12 digits)"
+      AlertEmail:
+          default: "Alert Email Address"
+      DBPassword:
+          default: "Database Password"
+      DashboardPassword:
+          default: "Dashboard Login Password"
+      EC2KeyPairName:
+          default: "EC2 Key Pair Name"
+      ScheduleExpression1:
+          default: "Schedule 1 (Monday cron)"
+      ScheduleExpression2:
+          default: "Schedule 2 (Thursday cron)"
+      ScheduleTimezone:
+          default: "Schedule Timezone"
+      PollIntervalMinutes:
+          default: "Poll Interval (minutes)"
+      AlertTagsEnabled:
+          default: "Enable Missing Tag Alerts"
+      RetainDataOnDelete:
+          default: "Retain Data on Stack Delete"
+      ExistingIAMRoleName:
+          default: "Existing IAM Role (optional)"
+
+Parameters:
+
+  AccountId:
+    Type: String
+    Description: >
+      Your 12-digit AWS Account ID.
+      Find it: AWS Console top-right -> click your name -> Account ID.
+      Example: 121490076448
+    AllowedPattern: "^[0-9]{12}$"
+    ConstraintDescription: "Must be exactly 12 digits."
+
+  AlertEmail:
+    Type: String
+    Description: >
+      Email for alert notifications.
+      You MUST click the AWS confirmation link sent to this address.
+    AllowedPattern: "^[a-zA-Z0-9._%+\\-]+@[a-zA-Z0-9.\\-]+\\.[a-zA-Z]{2,}$"
+    ConstraintDescription: "Must be a valid email address."
+
+  DBPassword:
+    Type: String
+    NoEcho: true
+    MinLength: 8
+    MaxLength: 41
+    Description: >
+      RDS password. 8-41 chars. Letters, numbers and: ! # $ % ^ & * - _ = +
+      Do NOT use: @ / " spaces (RDS rejects these).
+    AllowedPattern: "^[a-zA-Z0-9!#$%^&*\\-_=+]+$"
+    ConstraintDescription: "8-41 chars. Letters, numbers and: ! # $ % ^ & * - _ = +"
+
+  DashboardPassword:
+    Type: String
+    NoEcho: true
+    MinLength: 8
+    MaxLength: 64
+    Description: "Dashboard login password. Username is always: admin"
+    AllowedPattern: "^[a-zA-Z0-9!#$%^&*\\-_=+@.]+$"
+    ConstraintDescription: "8-64 characters."
+
+  EC2KeyPairName:
+    Type: AWS::EC2::KeyPair::KeyName
+    Description: >
+      Existing EC2 Key Pair for SSH access.
+      Create one: EC2 Console -> Key Pairs -> Create key pair.
+
+  ScheduleExpression1:
+    Type: String
+    Default: "cron(30 1 ? * MON *)"
+    Description: >
+      Monday poll schedule. Default: Monday 7:00 AM IST (01:30 UTC).
+      Format: cron(minutes hours ? * DAY-OF-WEEK *)
+      IST examples: 7am=cron(30 1 ? * MON *) | 9am=cron(30 3 ? * MON *) | 12pm=cron(30 6 ? * MON *)
+      Change DAY-OF-WEEK: MON TUE WED THU FRI SAT SUN
+
+  ScheduleExpression2:
+    Type: String
+    Default: "cron(30 1 ? * THU *)"
+    Description: >
+      Thursday poll schedule. Default: Thursday 7:00 AM IST (01:30 UTC).
+      Format: cron(minutes hours ? * DAY-OF-WEEK *)
+      IST examples: 7am=cron(30 1 ? * THU *) | 9am=cron(30 3 ? * THU *) | 12pm=cron(30 6 ? * THU *)
+      Change DAY-OF-WEEK: MON TUE WED THU FRI SAT SUN
+
+  ScheduleTimezone:
+    Type: String
+    Default: "Asia/Kolkata"
+    Description: >
+      Timezone for schedule display. Default: Asia/Kolkata (IST).
+      Other options: UTC | America/New_York | Europe/London | Asia/Singapore
+
+  PollIntervalMinutes:
+    Type: Number
+    Default: 60
+    MinValue: 15
+    MaxValue: 1440
+    Description: "Poller run interval in minutes. Default 60."
+
+  AlertTagsEnabled:
+    Type: String
+    Default: "false"
+    AllowedValues: ["true", "false"]
+    Description: "Alert when resources missing Owner/Project/Environment tags."
+
+  AlertEC2RunningDays:
+    Type: Number
+    Default: 30
+    MinValue: 1
+    MaxValue: 365
+
+  AlertEC2StoppedDays:
+    Type: Number
+    Default: 7
+    MinValue: 1
+    MaxValue: 365
+
+  AlertEBSUnattachedDays:
+    Type: Number
+    Default: 7
+    MinValue: 1
+    MaxValue: 365
+
+  AlertRDSStoppedDays:
+    Type: Number
+    Default: 7
+    MinValue: 1
+    MaxValue: 7
+    Description: "Max 7 - AWS auto-restarts RDS after 7 days."
+
+  AlertIAMInactiveDays:
+    Type: Number
+    Default: 90
+    MinValue: 1
+    MaxValue: 365
+
+  RetainDataOnDelete:
+    Type: String
+    Default: "true"
+    AllowedValues: ["true", "false"]
+    Description: >
+      true: S3 bucket kept + RDS final snapshot on stack delete (recommended).
+      false: Everything deleted on stack delete.
+
+  ExistingIAMRoleName:
+    Type: String
+    Default: ""
+    Description: "OPTIONAL: Existing IAM role. Leave blank to create one."
+
+Conditions:
+  CreateIAMRole: !Equals [!Ref ExistingIAMRoleName, ""]
+  RetainData: !Equals [!Ref RetainDataOnDelete, "true"]
+
+Mappings:
+  RegionAMI:
+    ap-south-1:
+      AMI: ami-0f58b397bc5c1f2e8
+    us-east-1:
+      AMI: ami-0261755bbcb8c4a84
+    us-west-2:
+      AMI: ami-0905a3c97561e0b69
+    eu-west-1:
+      AMI: ami-0694d931cee176e7d
+    ap-southeast-1:
+      AMI: ami-078c1149d8ad719a7
+    ap-northeast-1:
+      AMI: ami-0d52744d6551d851e
+
+Resources:
+
+  # ==========================================================================
+  # VPC + NETWORKING
+  # ==========================================================================
+
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: "10.0.0.0/16"
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: lifecycle-tracker-vpc
+        - Key: Stack
+          Value: !Ref AWS::StackName
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: lifecycle-tracker-igw
+
+  IGWAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: "10.0.1.0/24"
+      AvailabilityZone: !Select [0, !GetAZs ""]
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: lifecycle-tracker-public-1
+
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: "10.0.2.0/24"
+      AvailabilityZone: !Select [1, !GetAZs ""]
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: lifecycle-tracker-public-2
+
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: "10.0.3.0/24"
+      AvailabilityZone: !Select [0, !GetAZs ""]
+      Tags:
+        - Key: Name
+          Value: lifecycle-tracker-private-1
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: "10.0.4.0/24"
+      AvailabilityZone: !Select [1, !GetAZs ""]
+      Tags:
+        - Key: Name
+          Value: lifecycle-tracker-private-2
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: lifecycle-tracker-public-rt
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: IGWAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: "0.0.0.0/0"
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnet1RouteTableAssoc:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet1
+      RouteTableId: !Ref PublicRouteTable
+
+  PublicSubnet2RouteTableAssoc:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet2
+      RouteTableId: !Ref PublicRouteTable
+
+  # ==========================================================================
+  # ELASTIC IP - stable dashboard URL across stop/start cycles
+  # ==========================================================================
+
+  ElasticIP:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: lifecycle-tracker-eip
+        - Key: Stack
+          Value: !Ref AWS::StackName
+
+  ElasticIPAssociation:
+    Type: AWS::EC2::EIPAssociation
+    Properties:
+      AllocationId: !GetAtt ElasticIP.AllocationId
+      InstanceId: !Ref EC2Instance
+
+  # ==========================================================================
+  # SECURITY GROUPS
+  # ==========================================================================
+
+  EC2SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub "lifecycle-tracker-ec2-${AWS::StackName}"
+      GroupDescription: EC2 lifecycle tracker dashboard
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: "0.0.0.0/0"
+          Description: "SSH access"
+        - IpProtocol: tcp
+          FromPort: 5000
+          ToPort: 5000
+          CidrIp: "0.0.0.0/0"
+          Description: "Dashboard port 5000"
+      SecurityGroupEgress:
+        - IpProtocol: "-1"
+          CidrIp: "0.0.0.0/0"
+      Tags:
+        - Key: Name
+          Value: lifecycle-tracker-ec2-sg
+
+  RDSSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub "lifecycle-tracker-rds-${AWS::StackName}"
+      GroupDescription: RDS PostgreSQL private access
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          SourceSecurityGroupId: !Ref EC2SecurityGroup
+          Description: "PostgreSQL from EC2"
+      Tags:
+        - Key: Name
+          Value: lifecycle-tracker-rds-sg
+
+  # ==========================================================================
+  # IAM - includes self-stop permissions for EC2 + RDS
+  # ==========================================================================
+
+  LifecycleTrackerRole:
+    Type: AWS::IAM::Role
+    Condition: CreateIAMRole
+    Properties:
+      RoleName: !Sub "lifecycle-tracker-ec2-role-${AWS::StackName}"
+      Description: AWS access for lifecycle tracker poller and self-management
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: LifecycleTrackerPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: EC2ReadOnly
+                Effect: Allow
+                Action:
+                  - ec2:DescribeInstances
+                  - ec2:DescribeVolumes
+                  - ec2:DescribeSnapshots
+                  - ec2:DescribeAddresses
+                  - ec2:DescribeSecurityGroups
+                  - ec2:DescribeNetworkInterfaces
+                Resource: "*"
+              - Sid: EC2SelfStop
+                Effect: Allow
+                Action:
+                  - ec2:StopInstances
+                Resource: "*"
+                Condition:
+                  StringEquals:
+                    "ec2:ResourceTag/Stack": !Ref AWS::StackName
+              - Sid: RDSReadAndStop
+                Effect: Allow
+                Action:
+                  - rds:DescribeDBInstances
+                  - rds:DescribeDBSnapshots
+                  - rds:ListTagsForResource
+                  - rds:StopDBInstance
+                Resource: "*"
+              - Sid: S3ReadOnly
+                Effect: Allow
+                Action:
+                  - s3:ListAllMyBuckets
+                  - s3:GetBucketTagging
+                  - s3:GetBucketLocation
+                Resource: "*"
+              - Sid: IAMReadOnly
+                Effect: Allow
+                Action:
+                  - iam:ListUsers
+                  - iam:ListAccessKeys
+                  - iam:GetAccessKeyLastUsed
+                  - iam:GetLoginProfile
+                  - iam:ListUserTags
+                Resource: "*"
+              - Sid: CloudWatchReadOnly
+                Effect: Allow
+                Action:
+                  - cloudwatch:DescribeAlarms
+                  - cloudwatch:ListTagsForResource
+                Resource: "*"
+              - Sid: TaggingAPI
+                Effect: Allow
+                Action:
+                  - tag:GetResources
+                Resource: "*"
+              - Sid: SNSPublish
+                Effect: Allow
+                Action:
+                  - sns:Publish
+                Resource: !Ref AlertsTopic
+              - Sid: SecretsManagerRead
+                Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                Resource: !Ref DBSecret
+              - Sid: S3SnapshotsWrite
+                Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:GetObject
+                  - s3:DeleteObject
+                  - s3:ListBucket
+                Resource:
+                  - !GetAtt SnapshotBucket.Arn
+                  - !Sub "${SnapshotBucket.Arn}/*"
+              - Sid: CloudFormationSignal
+                Effect: Allow
+                Action:
+                  - cloudformation:SignalResource
+                Resource: !Sub "arn:aws:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${AWS::StackName}/*"
+
+  EC2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      InstanceProfileName: !Sub "lifecycle-tracker-profile-${AWS::StackName}"
+      Roles:
+        - !If
+          - CreateIAMRole
+          - !Ref LifecycleTrackerRole
+          - !Ref ExistingIAMRoleName
+
+  # ==========================================================================
+  # IAM ROLE FOR EVENTBRIDGE SCHEDULER - starts EC2 on schedule
+  # ==========================================================================
+
+  SchedulerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "lifecycle-tracker-scheduler-${AWS::StackName}"
+      Description: Allows EventBridge Scheduler to start EC2 instance
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: scheduler.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: StartEC2Policy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ec2:StartInstances
+                Resource: !Sub "arn:aws:ec2:${AWS::Region}:${AWS::AccountId}:instance/*"
+                Condition:
+                  StringEquals:
+                    "ec2:ResourceTag/Stack": !Ref AWS::StackName
+
+  # ==========================================================================
+  # SECRETS MANAGER
+  # ==========================================================================
+
+  DBSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub "lifecycle-tracker-db-${AWS::StackName}"
+      Description: RDS credentials for lifecycle tracker
+      SecretString: !Sub |
+        {"username":"trackeradmin","password":"${DBPassword}"}
+      Tags:
+        - Key: Stack
+          Value: !Ref AWS::StackName
+
+  # ==========================================================================
+  # RDS
+  # ==========================================================================
+
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupName: !Sub "lifecycle-tracker-${AWS::StackName}"
+      DBSubnetGroupDescription: Private subnets for lifecycle tracker RDS
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+
+  RDSInstance:
+    Type: AWS::RDS::DBInstance
+    DependsOn: DBSecret
+    DeletionPolicy: !If [RetainData, Snapshot, Delete]
+    UpdateReplacePolicy: Snapshot
+    Properties:
+      DBInstanceIdentifier: !Sub "lifecycle-tracker-db-${AWS::StackName}"
+      DBInstanceClass: db.t3.micro
+      Engine: postgres
+      EngineVersion: "16"
+      MasterUsername: trackeradmin
+      MasterUserPassword: !Ref DBPassword
+      DBName: lifecycle_tracker
+      AllocatedStorage: "20"
+      StorageType: gp2
+      MultiAZ: false
+      PubliclyAccessible: false
+      VPCSecurityGroups:
+        - !Ref RDSSecurityGroup
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      BackupRetentionPeriod: 0
+      DeletionProtection: false
+      Tags:
+        - Key: Name
+          Value: lifecycle-tracker-db
+        - Key: Stack
+          Value: !Ref AWS::StackName
+
+  # ==========================================================================
+  # SNS
+  # ==========================================================================
+
+  AlertsTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub "lifecycle-tracker-alerts-${AWS::StackName}"
+
+  AlertsSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn: !Ref AlertsTopic
+      Protocol: email
+      Endpoint: !Ref AlertEmail
+
+  AlertsTopicPolicy:
+    Type: AWS::SNS::TopicPolicy
+    Properties:
+      Topics:
+        - !Ref AlertsTopic
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: !If
+                - CreateIAMRole
+                - !GetAtt LifecycleTrackerRole.Arn
+                - !Sub "arn:aws:iam::${AWS::AccountId}:role/${ExistingIAMRoleName}"
+            Action: sns:Publish
+            Resource: !Ref AlertsTopic
+
+  # ==========================================================================
+  # S3
+  # ==========================================================================
+
+  SnapshotBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: !If [RetainData, Retain, Delete]
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketName: !Sub "lifecycle-tracker-snapshots-${AccountId}"
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: cleanup-archives
+            Status: Enabled
+            Prefix: archive/
+            ExpirationInDays: 90
+          - Id: cleanup-data
+            Status: Enabled
+            Prefix: data/
+            ExpirationInDays: 90
+      Tags:
+        - Key: Name
+          Value: lifecycle-tracker-snapshots
+        - Key: Stack
+          Value: !Ref AWS::StackName
+
+  SnapshotBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref SnapshotBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: AllowCloudFrontOAC
+            Effect: Allow
+            Principal:
+              Service: cloudfront.amazonaws.com
+            Action: s3:GetObject
+            Resource: !Sub "${SnapshotBucket.Arn}/*"
+            Condition:
+              StringEquals:
+                AWS:SourceArn: !Sub
+                  - "arn:aws:cloudfront::${AWS::AccountId}:distribution/${DistId}"
+                  - DistId: !GetAtt CloudFrontDistribution.Id
+
+  # ==========================================================================
+  # CLOUDFRONT
+  # ==========================================================================
+
+  CloudFrontOAC:
+    Type: AWS::CloudFront::OriginAccessControl
+    Properties:
+      OriginAccessControlConfig:
+        Name: !Sub "lifecycle-tracker-oac-${AWS::StackName}"
+        Description: OAC for lifecycle tracker snapshot bucket
+        OriginAccessControlOriginType: s3
+        SigningBehavior: always
+        SigningProtocol: sigv4
+
+  CloudFrontDistribution:
+    Type: AWS::CloudFront::Distribution
+    DependsOn: SnapshotBucket
+    Properties:
+      DistributionConfig:
+        Comment: !Sub "Lifecycle Tracker Snapshots ${AWS::StackName}"
+        Enabled: true
+        DefaultRootObject: index.html
+        HttpVersion: http2
+        IPV6Enabled: true
+        PriceClass: PriceClass_100
+        Origins:
+          - Id: S3SnapshotOrigin
+            DomainName: !GetAtt SnapshotBucket.RegionalDomainName
+            S3OriginConfig:
+              OriginAccessIdentity: ""
+            OriginAccessControlId: !GetAtt CloudFrontOAC.Id
+        DefaultCacheBehavior:
+          TargetOriginId: S3SnapshotOrigin
+          ViewerProtocolPolicy: redirect-to-https
+          AllowedMethods: [GET, HEAD, OPTIONS]
+          CachedMethods: [GET, HEAD]
+          Compress: true
+          CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6
+        CustomErrorResponses:
+          - ErrorCode: 403
+            ResponseCode: 200
+            ResponsePagePath: /latest/index.html
+            ErrorCachingMinTTL: 0
+          - ErrorCode: 404
+            ResponseCode: 200
+            ResponsePagePath: /latest/index.html
+            ErrorCachingMinTTL: 0
+      Tags:
+        - Key: Name
+          Value: lifecycle-tracker-cloudfront
+        - Key: Stack
+          Value: !Ref AWS::StackName
+
+  # ==========================================================================
+  # EVENTBRIDGE SCHEDULER - starts EC2 on Mon + Thu automatically
+  # ==========================================================================
+
+  PollSchedule1:
+    Type: AWS::Scheduler::Schedule
+    Properties:
+      Name: !Sub "lifecycle-tracker-schedule1-${AWS::StackName}"
+      Description: !Sub "Start EC2 for poll - Schedule 1 (${ScheduleExpression1})"
+      ScheduleExpression: !Ref ScheduleExpression1
+      ScheduleExpressionTimezone: !Ref ScheduleTimezone
+      FlexibleTimeWindow:
+        Mode: "OFF"
+      State: ENABLED
+      Target:
+        Arn: "arn:aws:scheduler:::aws-sdk:ec2:startInstances"
+        RoleArn: !GetAtt SchedulerRole.Arn
+        Input: !Sub '{"InstanceIds":["${EC2Instance}"]}'
+
+  PollSchedule2:
+    Type: AWS::Scheduler::Schedule
+    Properties:
+      Name: !Sub "lifecycle-tracker-schedule2-${AWS::StackName}"
+      Description: !Sub "Start EC2 for poll - Schedule 2 (${ScheduleExpression2})"
+      ScheduleExpression: !Ref ScheduleExpression2
+      ScheduleExpressionTimezone: !Ref ScheduleTimezone
+      FlexibleTimeWindow:
+        Mode: "OFF"
+      State: ENABLED
+      Target:
+        Arn: "arn:aws:scheduler:::aws-sdk:ec2:startInstances"
+        RoleArn: !GetAtt SchedulerRole.Arn
+        Input: !Sub '{"InstanceIds":["${EC2Instance}"]}'
+
+  # ==========================================================================
+  # EC2
+  # ==========================================================================
+
+  EC2Instance:
+    Type: AWS::EC2::Instance
+    DependsOn:
+      - RDSInstance
+      - DBSecret
+      - AlertsTopic
+      - SnapshotBucket
+      - CloudFrontDistribution
+    CreationPolicy:
+      ResourceSignal:
+        Timeout: PT45M
+        Count: 1
+    Properties:
+      InstanceType: t3.micro
+      ImageId: !FindInMap [RegionAMI, !Ref AWS::Region, AMI]
+      KeyName: !Ref EC2KeyPairName
+      IamInstanceProfile: !Ref EC2InstanceProfile
+      NetworkInterfaces:
+        - AssociatePublicIpAddress: true
+          DeviceIndex: "0"
+          GroupSet:
+            - !Ref EC2SecurityGroup
+          SubnetId: !Ref PublicSubnet1
+      BlockDeviceMappings:
+        - DeviceName: /dev/sda1
+          Ebs:
+            VolumeSize: 20
+            VolumeType: gp3
+            DeleteOnTermination: true
+      Tags:
+        - Key: Name
+          Value: lifecycle-tracker-app
+        - Key: Stack
+          Value: !Ref AWS::StackName
+      UserData:
+        Fn::Base64:
+          !Sub |
+            #!/bin/bash
+            exec > >(tee /var/log/lifecycle-tracker-setup.log) 2>&1
+            echo "=== Lifecycle Tracker Setup ==="
+            echo "Started: $(date)"
+
+            # CloudFormation signal helper using AWS CLI
+            # (aws-cfn-bootstrap is incompatible with Python 3.12 on Ubuntu 24.04)
+            IMDS_TOKEN=$(curl -s -X PUT "http://169.254.169.254/latest/api/token" \
+              -H "X-aws-ec2-metadata-token-ttl-seconds: 60")
+            INSTANCE_ID=$(curl -s \
+              -H "X-aws-ec2-metadata-token: $IMDS_TOKEN" \
+              http://169.254.169.254/latest/meta-data/instance-id)
+            echo "Instance ID: $INSTANCE_ID"
+
+            signal_cfn() {
+              STATUS=$1
+              echo "CloudFormation signal: $STATUS"
+              aws cloudformation signal-resource \
+                --stack-name "${AWS::StackName}" \
+                --logical-resource-id "EC2Instance" \
+                --unique-id "$INSTANCE_ID" \
+                --status "$STATUS" \
+                --region "${AWS::Region}" || true
+            }
+
+            trap 'signal_cfn FAILURE' ERR
+
+            export DEBIAN_FRONTEND=noninteractive
+            export NEEDRESTART_MODE=a
+
+            # ── Step 1: Install packages ──
+            echo "--- Installing packages ---"
+            apt-get update -y
+            apt-get install -y --no-install-recommends \
+              docker.io \
+              docker-compose-v2 \
+              git \
+              postgresql-client \
+              unzip \
+              curl \
+              python3
+
+            # ── Step 2: AWS CLI v2 via official binary ──
+            echo "--- Installing AWS CLI v2 ---"
+            curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" \
+              -o /tmp/awscliv2.zip
+            unzip -q /tmp/awscliv2.zip -d /tmp/
+            /tmp/aws/install --update
+            rm -rf /tmp/awscliv2.zip /tmp/aws/
+            aws --version
+            echo "AWS CLI installed"
+
+            # ── Step 3: Docker ──
+            echo "--- Configuring Docker ---"
+            systemctl enable docker
+            systemctl start docker
+            usermod -aG docker ubuntu
+            docker --version
+            echo "Docker ready"
+
+            # ── Step 4: Clone repo ──
+            echo "--- Cloning repository ---"
+            cd /home/ubuntu
+            git clone https://github.com/ADITYANAIR01/aws-resource-lifecycle-tracker
+            cd aws-resource-lifecycle-tracker
+            chown -R ubuntu:ubuntu .
+            echo "Repository cloned"
+
+            # ── Step 5: Fetch DB password ──
+            echo "--- Fetching credentials ---"
+            DB_PASSWORD=$(aws secretsmanager get-secret-value \
+              --secret-id "${DBSecret}" \
+              --region "${AWS::Region}" \
+              --query SecretString \
+              --output text | python3 -c "import sys,json; print(json.load(sys.stdin)['password'])")
+
+            if [ -z "$DB_PASSWORD" ]; then
+              echo "ERROR: DB_PASSWORD empty"
+              signal_cfn FAILURE
+              exit 1
+            fi
+            echo "Credentials fetched"
+
+            # ── Step 6: Write .env ──
+            echo "--- Writing .env ---"
+            cat > /home/ubuntu/aws-resource-lifecycle-tracker/.env << ENVEOF
+            DB_HOST=${RDSInstance.Endpoint.Address}
+            DB_PORT=5432
+            DB_NAME=lifecycle_tracker
+            DB_USER=trackeradmin
+            DB_PASSWORD=${!DB_PASSWORD}
+            AWS_REGION=${AWS::Region}
+            AWS_ACCOUNT_ID=${AccountId}
+            SNS_TOPIC_ARN=${AlertsTopic}
+            S3_SNAPSHOT_BUCKET=lifecycle-tracker-snapshots-${AccountId}
+            DASHBOARD_USER=admin
+            DASHBOARD_PASSWORD=${DashboardPassword}
+            FLASK_DEBUG=false
+            POLL_INTERVAL_MINUTES=${PollIntervalMinutes}
+            ALERT_TAGS_ENABLED=${AlertTagsEnabled}
+            ALERT_EC2_RUNNING_DAYS=${AlertEC2RunningDays}
+            ALERT_EC2_STOPPED_DAYS=${AlertEC2StoppedDays}
+            ALERT_EBS_UNATTACHED_DAYS=${AlertEBSUnattachedDays}
+            ALERT_RDS_STOPPED_DAYS=${AlertRDSStoppedDays}
+            ALERT_IAM_INACTIVE_DAYS=${AlertIAMInactiveDays}
+            REQUIRED_TAGS=Owner,Project,Environment
+            ENVEOF
+            echo ".env written"
+
+            # ── Step 7: Wait for RDS ──
+            echo "--- Waiting for RDS ---"
+            for i in $(seq 1 30); do
+              if PGPASSWORD="${!DB_PASSWORD}" psql \
+                -h "${RDSInstance.Endpoint.Address}" \
+                -U trackeradmin \
+                -d lifecycle_tracker \
+                -c "SELECT 1" > /dev/null 2>&1; then
+                echo "RDS ready after ${!i} attempt(s)"
+                break
+              fi
+              if [ "${!i}" -eq 30 ]; then
+                echo "ERROR: RDS not ready after 30 attempts"
+                signal_cfn FAILURE
+                exit 1
+              fi
+              echo "  Attempt ${!i}/30 - waiting 10s..."
+              sleep 10
+            done
+
+            # ── Step 8: Apply schema ──
+            echo "--- Applying schema ---"
+            PGPASSWORD="${!DB_PASSWORD}" psql \
+              -h "${RDSInstance.Endpoint.Address}" \
+              -U trackeradmin \
+              -d lifecycle_tracker \
+              -f /home/ubuntu/aws-resource-lifecycle-tracker/db/schema.sql
+            echo "Schema applied"
+
+            # ── Step 9: Start containers ──
+            echo "--- Starting containers ---"
+            cd /home/ubuntu/aws-resource-lifecycle-tracker
+            docker compose up -d
+            echo "Containers started"
+
+            # ── Step 10: Health check ──
+            echo "--- Health check ---"
+            for i in $(seq 1 18); do
+              if curl -sf http://localhost:5000/health > /dev/null 2>&1; then
+                echo "Dashboard healthy after ${!i} attempt(s)"
+                break
+              fi
+              echo "  Attempt ${!i}/18 - waiting 10s..."
+              sleep 10
+            done
+
+            # ── Step 11: Install poll-and-stop service ──
+            # This service runs on every subsequent boot.
+            # It waits for the poll + snapshot to complete, then stops RDS and EC2.
+            # It does NOT run on this first boot (flag file check).
+            echo "--- Installing poll-and-stop service ---"
+            mkdir -p /var/lib/lifecycle-tracker
+
+            cat > /usr/local/bin/poll-and-stop.sh << 'SCRIPTEOF'
+            #!/bin/bash
+            LOG=/var/log/poll-and-stop.log
+            exec >> $LOG 2>&1
+            echo "=== poll-and-stop: $(date) ==="
+
+            # Skip on first boot (CloudFormation setup boot)
+            if [ ! -f /var/lib/lifecycle-tracker/setup-complete ]; then
+              echo "First boot - skipping auto-stop"
+              exit 0
+            fi
+
+            cd /home/ubuntu/aws-resource-lifecycle-tracker
+
+            # Wait for RDS to become available (it may be starting up)
+            echo "Waiting for RDS..."
+            DB_HOST=$(grep DB_HOST .env | cut -d= -f2)
+            DB_PASS=$(grep DB_PASSWORD .env | cut -d= -f2)
+            for i in $(seq 1 24); do
+              if PGPASSWORD="$DB_PASS" psql -h "$DB_HOST" -U trackeradmin -d lifecycle_tracker -c "SELECT 1" > /dev/null 2>&1; then
+                echo "RDS ready after $i attempt(s)"
+                break
+              fi
+              echo "  Attempt $i/24 - waiting 15s..."
+              sleep 15
+            done
+
+            # Wait for app to be healthy
+            echo "Waiting for dashboard..."
+            for i in $(seq 1 18); do
+              if curl -sf http://localhost:5000/health > /dev/null 2>&1; then
+                echo "Dashboard healthy"
+                break
+              fi
+              sleep 10
+            done
+
+            # Poller runs immediately on startup then exports snapshot.
+            # Wait for snapshot export to complete (up to 15 minutes).
+            echo "Waiting for poll + snapshot..."
+            POLL_DONE=0
+            for i in $(seq 1 60); do
+              if docker compose logs poller 2>/dev/null | grep -q "Static snapshot export complete"; then
+                echo "Snapshot complete after $i checks"
+                POLL_DONE=1
+                break
+              fi
+              sleep 15
+            done
+
+            if [ "$POLL_DONE" -eq 0 ]; then
+              echo "Warning: snapshot timeout - proceeding with stop anyway"
+            fi
+
+            # Extra buffer for S3 upload to finish
+            sleep 30
+            echo "Stopping RDS..."
+
+            # Get metadata via IMDSv2
+            TOKEN=$(curl -s -X PUT "http://169.254.169.254/latest/api/token" \
+              -H "X-aws-ec2-metadata-token-ttl-seconds: 60")
+            REGION=$(curl -s -H "X-aws-ec2-metadata-token: $TOKEN" \
+              http://169.254.169.254/latest/meta-data/placement/region)
+            INSTANCE_ID=$(curl -s -H "X-aws-ec2-metadata-token: $TOKEN" \
+              http://169.254.169.254/latest/meta-data/instance-id)
+
+            # Stop RDS
+            DB_ID=$(aws rds describe-db-instances \
+              --region "$REGION" \
+              --query "DBInstances[?contains(DBInstanceIdentifier,'lifecycle-tracker-db')].DBInstanceIdentifier" \
+              --output text)
+
+            if [ -n "$DB_ID" ]; then
+              aws rds stop-db-instance \
+                --db-instance-identifier "$DB_ID" \
+                --region "$REGION" \
+                && echo "RDS stop initiated: $DB_ID" \
+                || echo "RDS stop failed (may already be stopped)"
+            else
+              echo "RDS instance not found - skipping"
+            fi
+
+            # Brief pause before EC2 stop
+            sleep 10
+
+            echo "Stopping EC2: $INSTANCE_ID"
+            aws ec2 stop-instances \
+              --instance-ids "$INSTANCE_ID" \
+              --region "$REGION"
+            echo "=== EC2 stop initiated: $(date) ==="
+            SCRIPTEOF
+
+            chmod +x /usr/local/bin/poll-and-stop.sh
+
+            cat > /etc/systemd/system/poll-and-stop.service << 'SVCEOF'
+            [Unit]
+            Description=Run poll cycle then stop EC2 and RDS
+            After=docker.service
+            Wants=docker.service
+
+            [Service]
+            Type=oneshot
+            User=ubuntu
+            ExecStart=/usr/local/bin/poll-and-stop.sh
+            RemainAfterExit=yes
+            StandardOutput=journal
+            StandardError=journal
+            TimeoutStartSec=1800
+
+            [Install]
+            WantedBy=multi-user.target
+            SVCEOF
+
+            systemctl daemon-reload
+            systemctl enable poll-and-stop.service
+            echo "poll-and-stop service installed and enabled"
+
+            # ── Step 12: Mark setup complete ──
+            # This flag tells poll-and-stop to skip auto-stop on this first boot.
+            # On all subsequent boots it will run the full poll-and-stop cycle.
+            touch /var/lib/lifecycle-tracker/setup-complete
+            echo "Setup flag created"
+
+            # ── Done ──
+            echo "=== Setup Complete: $(date) ==="
+            PUBLIC_IP=$(curl -s -H "X-aws-ec2-metadata-token: $IMDS_TOKEN" \
+              http://169.254.169.254/latest/meta-data/public-ipv4)
+            echo "Dashboard: http://${!PUBLIC_IP}:5000"
+
+            trap - ERR
+            signal_cfn SUCCESS
+            echo "Signal sent. Done."
+
+# ==========================================================================
+# OUTPUTS
+# ==========================================================================
+Outputs:
+
+  DashboardURL:
+    Description: >
+      Live dashboard URL - stable, never changes (Elastic IP).
+      Only accessible when EC2 is running.
+      Login: username=admin  password=DashboardPassword you set.
+    Value: !Sub "http://${ElasticIP}:5000"
+
+  SnapshotURL:
+    Description: >
+      Static snapshot via CloudFront - ALWAYS accessible even when EC2 is off.
+      Bookmark this URL. Updated after every poll cycle (Mon + Thu).
+    Value: !Sub "https://${CloudFrontDistribution.DomainName}/latest/index.html"
+
+  ElasticIPAddress:
+    Description: >
+      Static Elastic IP address for EC2.
+      Use this to SSH and access the live dashboard.
+      This IP never changes even when EC2 is stopped and restarted.
+    Value: !Ref ElasticIP
+
+  SSHCommand:
+    Description: SSH command (works every time - stable IP).
+    Value: !Sub "ssh -i ${EC2KeyPairName}.pem ubuntu@${ElasticIP}"
+
+  PollScheduleSummary:
+    Description: >
+      Automatic poll schedule. EC2 starts, polls, then stops itself and RDS.
+      Schedule 1 (Monday): see ScheduleExpression1 parameter.
+      Schedule 2 (Thursday): see ScheduleExpression2 parameter.
+      To change schedule: EventBridge -> Schedules -> find lifecycle-tracker-schedule*.
+    Value: !Sub "Mon: ${ScheduleExpression1} | Thu: ${ScheduleExpression2} | TZ: ${ScheduleTimezone}"
+
+  CostSummary:
+    Description: >
+      Estimated monthly cost (after free tier, 2 polls/week ~17 hrs/month):
+      EC2 t3.micro: ~$0.20/month | RDS db.t3.micro: ~$0.34/month | Total: ~$0.54/month.
+      Compare: always-on would cost ~$23/month. Savings: ~96%.
+    Value: "~$0.54/month after free tier (2 polls/week)"
+
+  SnapshotBucketName:
+    Description: >
+      S3 snapshot bucket. RETAINED on stack delete if RetainDataOnDelete=true.
+      To fully clean up: S3 console -> empty -> delete this bucket after stack delete.
+    Value: !Ref SnapshotBucket
+
+  RDSEndpoint:
+    Description: RDS PostgreSQL endpoint.
+    Value: !GetAtt RDSInstance.Endpoint.Address
+
+  SNSTopicARN:
+    Description: SNS topic ARN for alert emails.
+    Value: !Ref AlertsTopic
+
+  CleanupInstructions:
+    Description: >
+      TO DELETE EVERYTHING: CloudFormation -> delete this stack.
+      If RetainDataOnDelete=true (default) also manually delete:
+      1. S3 bucket in SnapshotBucketName output (S3 -> empty -> delete)
+      2. RDS snapshot (RDS -> Snapshots -> find stack name -> delete)
+      3. Elastic IP (EC2 -> Elastic IPs -> release)
+    Value: "See description."
