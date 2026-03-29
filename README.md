@@ -3,7 +3,7 @@
 
 🚀 **WEBSITE LIVE :** [https://tracker.adityanair.tech](https://tracker.adityanair.tech)
 
-# Quick Links
+## Quick Links
 
 - [CloudFormation Deployment Guides](#cloudformation-deployment)
 
@@ -124,11 +124,12 @@ docker compose up --build
 
 Open [localhost:5000](http://localhost:5000)
 
-Health check: http://localhost:5000/health
+Health check: <http://localhost:5000/health>
 
 ---
 
 ## 👨‍💻 Author
+
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for security rules, local setup, and PR guidelines.
@@ -145,5 +146,3 @@ Aditya Nair
 - [MIT LICENSE](LICENSE)
 
 - Built by [Aditya Nair](https://www.adityanair.tech)
-
----
