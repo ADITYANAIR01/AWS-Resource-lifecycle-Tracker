@@ -19,12 +19,12 @@ Before you begin, ensure you have the following:
 
 1 .  Download the CloudFormation Template
 
-- Download the file: [`CloudFormation/deploy-always-on.yaml`](deploy-always-on.yaml)
+- Download the file: [`deploy-always-on.yaml`](https://github.com/ADITYANAIR01/AWS-Resource-lifecycle-Tracker/blob/main/CloudFormation/deploy-always-on.yaml)
 
 2 . Upload to CloudFormation
 
 - Go to the AWS Console → CloudFormation → Create stack → With new resources (standard).
-- Upload the file you just downloaded: [`CloudFormation/deploy-always-on.yaml`](deploy-always-on.yaml)
+- Upload the file you just downloaded: [`CloudFormation/deploy-always-on.yaml`](https://github.com/ADITYANAIR01/AWS-Resource-lifecycle-Tracker/blob/main/CloudFormation/deploy-always-on.yaml)
 
 ---
 

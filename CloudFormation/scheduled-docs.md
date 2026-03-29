@@ -20,12 +20,12 @@ Before you begin, ensure you have the following:
 
 1.Download the CloudFormation Template
 
-- Download the file: [`CloudFormation/deploy-scheduled.yaml`](deploy-scheduled.yaml)
+- Download the file: [`CloudFormation/deploy-scheduled.yaml`](https://github.com/ADITYANAIR01/AWS-Resource-lifecycle-Tracker/blob/main/CloudFormation/deploy-scheduled.yaml)
 
 2.Upload to CloudFormation
 
 - Go to the AWS Console → CloudFormation → Create stack → With new resources (standard).
-- Upload the file you just downloaded: [`CloudFormation/deploy-scheduled.yaml`](deploy-scheduled.yaml)
+- Upload the file you just downloaded: [`CloudFormation/deploy-scheduled.yaml`](https://github.com/ADITYANAIR01/AWS-Resource-lifecycle-Tracker/blob/main/CloudFormation/deploy-scheduled.yaml)
 
 ---
 ![Uploading YAML in CloudFormation](../images/aws-resource-lifecycle-tracker-091.png)
