@@ -4,6 +4,33 @@ All notable changes to this project will be documented here.
 
 ## [1.0.0] — 2026-03-29
 
+### Fixed
+
+- `deploy-scheduled.yaml`: rewrite `.env`, `poll-and-stop.sh`, and
+  `poll-and-stop.service` heredocs flush-left — indentation bleed corrupted
+  all three files on disk (broken shebang, systemd parse failure, unreadable
+  env keys)
+- `deploy-scheduled.yaml`: add `rds:StartDBInstance` to IAM policy — without
+  it every scheduled boot after the first found RDS stopped and poll failed
+  silently
+- `poll-and-stop.sh`: start RDS at boot before waiting for connectivity;
+  check RDS status before issuing start to avoid duplicate start calls;
+  extend RDS readiness timeout from 24 to 40 attempts (covers 3-5 min startup)
+- `poll-and-stop.sh`: move IMDSv2 metadata fetch to top of script; raise
+  token TTL from 60s to 300s; remove duplicate IMDS fetch block at bottom
+- `poll-and-stop.sh`: scope `docker compose logs` with
+  `--since "$(date -d "$(uptime -s)" +%s)"` — unscoped logs matched previous
+  boot history causing premature EC2 stop; Unix timestamp format used instead
+  of raw `uptime -s` output which Docker's Go parser does not reliably accept
+- `poll-and-stop.sh`: fix `grep DB_PASSWORD` false match on
+  `DASHBOARD_PASSWORD` — changed to `grep -E "^DB_PASSWORD="`
+- `poll-and-stop.service`: add `network-online.target` to `After=` and
+  `Wants=` — AWS API calls need network up before script executes
+- `poll-and-stop.service`: raise `TimeoutStartSec` from 1800 to 2400 —
+  worst-case runtime is ~1735s leaving only 65s margin; now 665s
+- `UserData Step 9`: add `--build` to `docker compose up` — required on
+  fresh clone where no pre-built images exist
+
 ### Added
 
 - Phase 12: Open source release prep — CONTRIBUTING.md, CHANGELOG.md, LICENSE,

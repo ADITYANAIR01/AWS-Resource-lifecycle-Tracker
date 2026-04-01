@@ -422,13 +422,14 @@ Resources:
                 Condition:
                   StringEquals:
                     "ec2:ResourceTag/Stack": !Ref AWS::StackName
-              - Sid: RDSReadAndStop
+              - Sid: RDSReadStartStop
                 Effect: Allow
                 Action:
                   - rds:DescribeDBInstances
                   - rds:DescribeDBSnapshots
                   - rds:ListTagsForResource
                   - rds:StopDBInstance
+                  - rds:StartDBInstance
                 Resource: "*"
               - Sid: S3ReadOnly
                 Effect: Allow
@@ -875,27 +876,27 @@ Resources:
             # ── Step 6: Write .env ──
             echo "--- Writing .env ---"
             cat > /home/ubuntu/aws-resource-lifecycle-tracker/.env << ENVEOF
-            DB_HOST=${RDSInstance.Endpoint.Address}
-            DB_PORT=5432
-            DB_NAME=lifecycle_tracker
-            DB_USER=trackeradmin
-            DB_PASSWORD=${!DB_PASSWORD}
-            AWS_REGION=${AWS::Region}
-            AWS_ACCOUNT_ID=${AccountId}
-            SNS_TOPIC_ARN=${AlertsTopic}
-            S3_SNAPSHOT_BUCKET=lifecycle-tracker-snapshots-${AccountId}
-            DASHBOARD_USER=admin
-            DASHBOARD_PASSWORD=${DashboardPassword}
-            FLASK_DEBUG=false
-            POLL_INTERVAL_MINUTES=${PollIntervalMinutes}
-            ALERT_TAGS_ENABLED=${AlertTagsEnabled}
-            ALERT_EC2_RUNNING_DAYS=${AlertEC2RunningDays}
-            ALERT_EC2_STOPPED_DAYS=${AlertEC2StoppedDays}
-            ALERT_EBS_UNATTACHED_DAYS=${AlertEBSUnattachedDays}
-            ALERT_RDS_STOPPED_DAYS=${AlertRDSStoppedDays}
-            ALERT_IAM_INACTIVE_DAYS=${AlertIAMInactiveDays}
-            REQUIRED_TAGS=Owner,Project,Environment
-            ENVEOF
+DB_HOST=${RDSInstance.Endpoint.Address}
+DB_PORT=5432
+DB_NAME=lifecycle_tracker
+DB_USER=trackeradmin
+DB_PASSWORD=${!DB_PASSWORD}
+AWS_REGION=${AWS::Region}
+AWS_ACCOUNT_ID=${AccountId}
+SNS_TOPIC_ARN=${AlertsTopic}
+S3_SNAPSHOT_BUCKET=lifecycle-tracker-snapshots-${AccountId}
+DASHBOARD_USER=admin
+DASHBOARD_PASSWORD=${DashboardPassword}
+FLASK_DEBUG=false
+POLL_INTERVAL_MINUTES=${PollIntervalMinutes}
+ALERT_TAGS_ENABLED=${AlertTagsEnabled}
+ALERT_EC2_RUNNING_DAYS=${AlertEC2RunningDays}
+ALERT_EC2_STOPPED_DAYS=${AlertEC2StoppedDays}
+ALERT_EBS_UNATTACHED_DAYS=${AlertEBSUnattachedDays}
+ALERT_RDS_STOPPED_DAYS=${AlertRDSStoppedDays}
+ALERT_IAM_INACTIVE_DAYS=${AlertIAMInactiveDays}
+REQUIRED_TAGS=Owner,Project,Environment
+ENVEOF
             echo ".env written"
 
             # ── Step 7: Wait for RDS ──
@@ -930,7 +931,7 @@ Resources:
             # ── Step 9: Start containers ──
             echo "--- Starting containers ---"
             cd /home/ubuntu/aws-resource-lifecycle-tracker
-            docker compose up -d
+            docker compose up -d --build
             echo "Containers started"
 
             # ── Step 10: Health check ──
@@ -952,117 +953,139 @@ Resources:
             mkdir -p /var/lib/lifecycle-tracker
 
             cat > /usr/local/bin/poll-and-stop.sh << 'SCRIPTEOF'
-            #!/bin/bash
-            LOG=/var/log/poll-and-stop.log
-            exec >> $LOG 2>&1
-            echo "=== poll-and-stop: $(date) ==="
+#!/bin/bash
+LOG=/var/log/poll-and-stop.log
+exec >> $LOG 2>&1
+echo "=== poll-and-stop: $(date) ==="
 
-            # Skip on first boot (CloudFormation setup boot)
-            if [ ! -f /var/lib/lifecycle-tracker/setup-complete ]; then
-              echo "First boot - skipping auto-stop"
-              exit 0
-            fi
+# Skip on first boot (CloudFormation setup boot)
+if [ ! -f /var/lib/lifecycle-tracker/setup-complete ]; then
+  echo "First boot - skipping auto-stop"
+  exit 0
+fi
 
-            cd /home/ubuntu/aws-resource-lifecycle-tracker
+cd /home/ubuntu/aws-resource-lifecycle-tracker
 
-            # Wait for RDS to become available (it may be starting up)
-            echo "Waiting for RDS..."
-            DB_HOST=$(grep DB_HOST .env | cut -d= -f2)
-            DB_PASS=$(grep DB_PASSWORD .env | cut -d= -f2)
-            for i in $(seq 1 24); do
-              if PGPASSWORD="$DB_PASS" psql -h "$DB_HOST" -U trackeradmin -d lifecycle_tracker -c "SELECT 1" > /dev/null 2>&1; then
-                echo "RDS ready after $i attempt(s)"
-                break
-              fi
-              echo "  Attempt $i/24 - waiting 15s..."
-              sleep 15
-            done
+# Get metadata via IMDSv2 early - needed for RDS start
+TOKEN=$(curl -s -X PUT "http://169.254.169.254/latest/api/token" \
+  -H "X-aws-ec2-metadata-token-ttl-seconds: 300")
+REGION=$(curl -s -H "X-aws-ec2-metadata-token: $TOKEN" \
+  http://169.254.169.254/latest/meta-data/placement/region)
+INSTANCE_ID=$(curl -s -H "X-aws-ec2-metadata-token: $TOKEN" \
+  http://169.254.169.254/latest/meta-data/instance-id)
+echo "Region: $REGION | Instance: $INSTANCE_ID"
 
-            # Wait for app to be healthy
-            echo "Waiting for dashboard..."
-            for i in $(seq 1 18); do
-              if curl -sf http://localhost:5000/health > /dev/null 2>&1; then
-                echo "Dashboard healthy"
-                break
-              fi
-              sleep 10
-            done
+# Start RDS - it was stopped after the last poll cycle
+DB_HOST=$(grep -E "^DB_HOST=" .env | cut -d= -f2)
+DB_PASS=$(grep -E "^DB_PASSWORD=" .env | cut -d= -f2)
+DB_ID=$(aws rds describe-db-instances \
+  --region "$REGION" \
+  --query "DBInstances[?contains(DBInstanceIdentifier,'lifecycle-tracker-db')].DBInstanceIdentifier" \
+  --output text)
 
-            # Poller runs immediately on startup then exports snapshot.
-            # Wait for snapshot export to complete (up to 15 minutes).
-            echo "Waiting for poll + snapshot..."
-            POLL_DONE=0
-            for i in $(seq 1 60); do
-              if docker compose logs poller 2>/dev/null | grep -q "Static snapshot export complete"; then
-                echo "Snapshot complete after $i checks"
-                POLL_DONE=1
-                break
-              fi
-              sleep 15
-            done
+if [ -n "$DB_ID" ]; then
+  DB_STATUS=$(aws rds describe-db-instances \
+    --db-instance-identifier "$DB_ID" \
+    --region "$REGION" \
+    --query "DBInstances[0].DBInstanceStatus" \
+    --output text)
+  echo "RDS current status: $DB_STATUS"
+  if [ "$DB_STATUS" = "stopped" ]; then
+    echo "Starting RDS: $DB_ID"
+    aws rds start-db-instance \
+      --db-instance-identifier "$DB_ID" \
+      --region "$REGION" \
+      && echo "RDS start initiated" \
+      || echo "RDS start failed"
+  else
+    echo "RDS already in state: $DB_STATUS - skipping start"
+  fi
+else
+  echo "WARNING: RDS instance not found"
+fi
 
-            if [ "$POLL_DONE" -eq 0 ]; then
-              echo "Warning: snapshot timeout - proceeding with stop anyway"
-            fi
+# Wait for RDS to become available (starting takes 3-5 min)
+echo "Waiting for RDS..."
+for i in $(seq 1 40); do
+  if PGPASSWORD="$DB_PASS" psql -h "$DB_HOST" -U trackeradmin -d lifecycle_tracker -c "SELECT 1" > /dev/null 2>&1; then
+    echo "RDS ready after $i attempt(s)"
+    break
+  fi
+  echo "  Attempt $i/40 - waiting 15s..."
+  sleep 15
+done
 
-            # Extra buffer for S3 upload to finish
-            sleep 30
-            echo "Stopping RDS..."
+# Wait for app to be healthy
+echo "Waiting for dashboard..."
+for i in $(seq 1 18); do
+  if curl -sf http://localhost:5000/health > /dev/null 2>&1; then
+    echo "Dashboard healthy"
+    break
+  fi
+  sleep 10
+done
 
-            # Get metadata via IMDSv2
-            TOKEN=$(curl -s -X PUT "http://169.254.169.254/latest/api/token" \
-              -H "X-aws-ec2-metadata-token-ttl-seconds: 60")
-            REGION=$(curl -s -H "X-aws-ec2-metadata-token: $TOKEN" \
-              http://169.254.169.254/latest/meta-data/placement/region)
-            INSTANCE_ID=$(curl -s -H "X-aws-ec2-metadata-token: $TOKEN" \
-              http://169.254.169.254/latest/meta-data/instance-id)
+# Poller runs immediately on startup then exports snapshot.
+# Wait for snapshot export to complete (up to 15 minutes).
+echo "Waiting for poll + snapshot..."
+POLL_DONE=0
+for i in $(seq 1 60); do
+  if docker compose logs poller --since "$(date -d "$(uptime -s)" +%s)" 2>/dev/null | grep -q "Static snapshot export complete"; then
+    echo "Snapshot complete after $i checks"
+    POLL_DONE=1
+    break
+  fi
+  sleep 15
+done
 
-            # Stop RDS
-            DB_ID=$(aws rds describe-db-instances \
-              --region "$REGION" \
-              --query "DBInstances[?contains(DBInstanceIdentifier,'lifecycle-tracker-db')].DBInstanceIdentifier" \
-              --output text)
+if [ "$POLL_DONE" -eq 0 ]; then
+  echo "Warning: snapshot timeout - proceeding with stop anyway"
+fi
 
-            if [ -n "$DB_ID" ]; then
-              aws rds stop-db-instance \
-                --db-instance-identifier "$DB_ID" \
-                --region "$REGION" \
-                && echo "RDS stop initiated: $DB_ID" \
-                || echo "RDS stop failed (may already be stopped)"
-            else
-              echo "RDS instance not found - skipping"
-            fi
+# Extra buffer for S3 upload to finish
+sleep 30
+echo "Stopping RDS..."
 
-            # Brief pause before EC2 stop
-            sleep 10
+if [ -n "$DB_ID" ]; then
+  aws rds stop-db-instance \
+    --db-instance-identifier "$DB_ID" \
+    --region "$REGION" \
+    && echo "RDS stop initiated: $DB_ID" \
+    || echo "RDS stop failed (may already be stopped)"
+else
+  echo "RDS instance not found - skipping stop"
+fi
 
-            echo "Stopping EC2: $INSTANCE_ID"
-            aws ec2 stop-instances \
-              --instance-ids "$INSTANCE_ID" \
-              --region "$REGION"
-            echo "=== EC2 stop initiated: $(date) ==="
-            SCRIPTEOF
+# Brief pause before EC2 stop
+sleep 10
+
+echo "Stopping EC2: $INSTANCE_ID"
+aws ec2 stop-instances \
+  --instance-ids "$INSTANCE_ID" \
+  --region "$REGION"
+echo "=== EC2 stop initiated: $(date) ==="
+SCRIPTEOF
 
             chmod +x /usr/local/bin/poll-and-stop.sh
 
             cat > /etc/systemd/system/poll-and-stop.service << 'SVCEOF'
-            [Unit]
-            Description=Run poll cycle then stop EC2 and RDS
-            After=docker.service
-            Wants=docker.service
+[Unit]
+Description=Run poll cycle then stop EC2 and RDS
+After=docker.service network-online.target
+Wants=docker.service network-online.target
 
-            [Service]
-            Type=oneshot
-            User=ubuntu
-            ExecStart=/usr/local/bin/poll-and-stop.sh
-            RemainAfterExit=yes
-            StandardOutput=journal
-            StandardError=journal
-            TimeoutStartSec=1800
+[Service]
+Type=oneshot
+User=ubuntu
+ExecStart=/usr/local/bin/poll-and-stop.sh
+RemainAfterExit=yes
+StandardOutput=journal
+StandardError=journal
+TimeoutStartSec=2400
 
-            [Install]
-            WantedBy=multi-user.target
-            SVCEOF
+[Install]
+WantedBy=multi-user.target
+SVCEOF
 
             systemctl daemon-reload
             systemctl enable poll-and-stop.service
