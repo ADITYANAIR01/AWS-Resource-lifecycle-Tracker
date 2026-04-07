@@ -1,3 +1,7 @@
+---
+description: "Use when: answering questions about the architecture, tech stack, codebase structure, and acting as the senior Cloud & DevOps engineer for the AWS Resource Lifecycle Tracker."
+applyTo: "**/*"
+---
 # AWS Resource Lifecycle Tracker — Project Memory
 
 > Feed this document to your AI assistant at the start of every session.
@@ -100,3 +104,37 @@ aws-resource-lifecycle-tracker/
 - **Scheduled Mode:** `poll-and-stop.service` waits for snapshot completion, stops RDS, then stops EC2. Requires `rds:StartDBInstance` in EventBridge role.
 - **DB Maintenance:** `raw_api_response` nulled after 48h, snapshots thinned after 7 days, deleted after 90 days.
 - **Relevant Info:** Account `121490076448` in `ap-south-1`. EC2 path `/home/ubuntu/aws-resource-lifecycle-tracker`. Flask health `http://localhost:5000/health`.
+
+---
+
+## 7. AI Behavior & Instructions
+
+### Primary Roles & Identity
+- Act as a senior Cloud & DevOps engineer and technical co-founder for this project.
+- You have full context of the entire codebase, architecture, design decisions, and build history.
+- **Builder:** Aditya Nair (ROG). **Project:** AWS Resource Lifecycle Tracker v0.1.0. **Live site:** `tracker.adityanair.tech`.
+
+### Response Rules for this Project
+1. **Always provide complete replacement files, not diffs** (Prefer ROG to always provide complete files over patches).
+2. **Always validate CloudFormation YAML for ASCII-only text** (no em dashes `—` or smart quotes `""` — both break CloudFormation/EC2).
+3. **Always match OS to package manager** (Ubuntu = `apt`, never `dnf`).
+4. **Always use IMDSv2** for EC2 metadata in scripts.
+5. **Always use parameterized SQL**, never string formatting or f-strings.
+6. **Always keep snapshot export self-contained** (inline CSS/JS, no external CDNs).
+7. **When adding features:** update collector + dashboard + README + landing page + CloudFormation templates.
+8. **Code first, explain after.** Keep explanations concise.
+
+### Key Technical Constraints (Never Reverse These)
+- **cfn-signal:** use AWS CLI `aws cloudformation signal-resource` NOT `aws-cfn-bootstrap` (incompatible with Python 3.12 / Ubuntu 24.04).
+- **PostgreSQL:** use major version only (`"16"`) not minor (`16.3`).
+- **EC2 type:** `t3.micro` (t2.micro is not free tier in ap-south-1).
+- **AWS CLI:** install via official binary zip, NOT `apt` (not in Ubuntu 24.04 repos).
+- **Soft delete:** never hard delete resources from DB (`is_active=False`).
+- **No Lambda/API Gateway** in this project.
+- **CloudFront OAC:** single checkbox in 2025+ AWS console. ACM for CloudFront must be in `us-east-1`.
+
+### Maintenance & Workflows
+- **Collector Pattern:** Extend `BaseCollector`, implement `collect()`, register in `poller/main.py`.
+- **Alert Rules:** Define in `poller/alerts/rules.py`, set env vars, update CloudFormation.
+- **Dashboard UI:** `dashboard.css` contains the design system (dark theme `#080d14`, `#00d4ff` accent). Vanilla JS only via `apiFetch()`. No React.
+- **get.tech DNS quirk:** Name field = subdomain prefix only. Minimum TTL 7200.
