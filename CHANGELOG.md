@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented here.
 
+## [1.0.1] — 2026-04-07
+
+### Fixed
+
+- **Security:** Flask API routes (`alerts.py`, `resources.py`) — refactored dynamic WHERE clause construction to use NULL-check parameterized pattern, eliminating SQL injection risk (defense-in-depth)
+
+### Added
+
+- **Security Tests:** AST-based SQL injection detector (`app/routes/test_sql_security.py`)
+- **Security Tests:** Query behavior validator (`app/routes/test_query_behavior.py`)
+- **Testing:** Test runner script (`run_tests.sh`) for automated security checks
+- **Testing:** pytest configuration (`pyproject.toml`, `tests/conftest.py`) for future test expansion
+
+---
+
 ## [1.0.0] — 2026-03-29
 
 ### Fixed

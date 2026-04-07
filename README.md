@@ -126,6 +126,8 @@ Open [localhost:5000](http://localhost:5000)
 
 Health check: <http://localhost:5000/health>
 
+**Run security tests:** `./run_tests.sh`
+
 ---
 
 ## 👨‍💻 Author

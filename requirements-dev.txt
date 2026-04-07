@@ -1,0 +1,10 @@
+# Development & Testing Dependencies
+# Install: pip install -r requirements-dev.txt
+
+# Code Quality
+black==24.3.0
+flake8==7.0.0
+
+# Testing (optional - only needed if writing pytest tests)
+pytest==8.1.1
+pytest-mock==3.14.0

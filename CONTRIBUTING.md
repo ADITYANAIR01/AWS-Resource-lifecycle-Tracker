@@ -69,4 +69,5 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
 
 - One PR per change — keep PRs small and focused
 - Make sure `docker compose up --build` works cleanly before submitting
+- **Run security tests:** `./run_tests.sh` must pass before submitting
 - Make sure no real credentials appear anywhere in the diff

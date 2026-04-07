@@ -27,37 +27,39 @@ def list_resources():
         filter_state  = request.args.get("state")
         filter_region = request.args.get("region")
 
-        conditions = ["is_active = TRUE"]
-        params     = []
-
-        if filter_type:
-            conditions.append("resource_type = %s")
-            params.append(filter_type)
-        if filter_state:
-            conditions.append("state = %s")
-            params.append(filter_state)
-        if filter_region:
-            conditions.append("region = %s")
-            params.append(filter_region)
-
-        where = " AND ".join(conditions)
-
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            cur.execute(
-                f"SELECT COUNT(*) as total FROM resources WHERE {where}",
-                params
-            )
+            # Parameterized query with NULL-check pattern - no dynamic SQL construction
+            cur.execute("""
+                SELECT COUNT(*) as total FROM resources
+                WHERE is_active = TRUE
+                  AND (%s IS NULL OR resource_type = %s)
+                  AND (%s IS NULL OR state = %s)
+                  AND (%s IS NULL OR region = %s)
+            """, [
+                filter_type, filter_type,
+                filter_state, filter_state,
+                filter_region, filter_region
+            ])
             total = cur.fetchone()["total"]
 
-            cur.execute(
-                f"""SELECT resource_id, resource_type, resource_name,
-                           account_id, region, state, created_at, first_seen,
-                           last_seen, last_modified, tags, estimated_cost_usd,
-                           is_active, deleted_at
-                    FROM resources WHERE {where}
-                    ORDER BY first_seen DESC LIMIT %s OFFSET %s""",
-                params + [page_size, offset],
-            )
+            cur.execute("""
+                SELECT resource_id, resource_type, resource_name,
+                       account_id, region, state, created_at, first_seen,
+                       last_seen, last_modified, tags, estimated_cost_usd,
+                       is_active, deleted_at
+                FROM resources
+                WHERE is_active = TRUE
+                  AND (%s IS NULL OR resource_type = %s)
+                  AND (%s IS NULL OR state = %s)
+                  AND (%s IS NULL OR region = %s)
+                ORDER BY first_seen DESC
+                LIMIT %s OFFSET %s
+            """, [
+                filter_type, filter_type,
+                filter_state, filter_state,
+                filter_region, filter_region,
+                page_size, offset
+            ])
             rows = [_serialize(dict(r)) for r in cur.fetchall()]
 
         return jsonify({

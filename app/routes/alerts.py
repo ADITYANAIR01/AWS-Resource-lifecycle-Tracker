@@ -22,45 +22,46 @@ def list_alerts():
         page            = max(1, int(request.args.get("page", 1)))
         offset          = (page - 1) * PAGE_SIZE
 
-        conditions = []
-        params     = []
-
-        if filter_status == "active":
-            conditions.append("a.resolved_at IS NULL")
-        elif filter_status == "resolved":
-            conditions.append("a.resolved_at IS NOT NULL")
-
-        if filter_severity:
-            conditions.append("a.severity = %s")
-            params.append(filter_severity)
-
-        if filter_type:
-            conditions.append("a.alert_type = %s")
-            params.append(filter_type)
-
-        where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
-
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            cur.execute(
-                f"SELECT COUNT(*) as total FROM alerts a {where}",
-                params
-            )
+            # Parameterized query with NULL-check pattern - no dynamic SQL construction
+            cur.execute("""
+                SELECT COUNT(*) as total FROM alerts a
+                WHERE (%s IS NULL OR a.severity = %s)
+                  AND (%s IS NULL OR a.alert_type = %s)
+                  AND (CASE %s
+                       WHEN 'active' THEN a.resolved_at IS NULL
+                       WHEN 'resolved' THEN a.resolved_at IS NOT NULL
+                       ELSE TRUE END)
+            """, [
+                filter_severity, filter_severity,
+                filter_type, filter_type,
+                filter_status
+            ])
             total = cur.fetchone()["total"]
 
-            cur.execute(
-                f"""SELECT a.id, a.resource_id, a.resource_type,
-                           a.alert_type, a.severity, a.message,
-                           a.triggered_at, a.resolved_at, a.acknowledged,
-                           r.resource_name, r.region
-                    FROM alerts a
-                    LEFT JOIN resources r
-                        ON  a.resource_id   = r.resource_id
-                        AND a.resource_type = r.resource_type
-                    {where}
-                    ORDER BY a.triggered_at DESC
-                    LIMIT %s OFFSET %s""",
-                params + [PAGE_SIZE, offset],
-            )
+            cur.execute("""
+                SELECT a.id, a.resource_id, a.resource_type,
+                       a.alert_type, a.severity, a.message,
+                       a.triggered_at, a.resolved_at, a.acknowledged,
+                       r.resource_name, r.region
+                FROM alerts a
+                LEFT JOIN resources r
+                    ON  a.resource_id   = r.resource_id
+                    AND a.resource_type = r.resource_type
+                WHERE (%s IS NULL OR a.severity = %s)
+                  AND (%s IS NULL OR a.alert_type = %s)
+                  AND (CASE %s
+                       WHEN 'active' THEN a.resolved_at IS NULL
+                       WHEN 'resolved' THEN a.resolved_at IS NOT NULL
+                       ELSE TRUE END)
+                ORDER BY a.triggered_at DESC
+                LIMIT %s OFFSET %s
+            """, [
+                filter_severity, filter_severity,
+                filter_type, filter_type,
+                filter_status,
+                PAGE_SIZE, offset
+            ])
             rows = []
             for row in cur.fetchall():
                 d = dict(row)
