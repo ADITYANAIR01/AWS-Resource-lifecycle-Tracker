@@ -397,6 +397,34 @@ Resources:
                   - cloudwatch:DescribeAlarms
                   - cloudwatch:ListTagsForResource
                 Resource: "*"
+              - Sid: ECSReadOnly
+                Effect: Allow
+                Action:
+                  - ecs:ListClusters
+                  - ecs:DescribeClusters
+                  - ecs:ListServices
+                  - ecs:DescribeServices
+                  - ecs:ListTasks
+                  - ecs:DescribeTasks
+                  - ecs:DescribeTaskDefinition
+                  - ecs:DescribeContainerInstances
+                  - ecs:ListTagsForResource
+                Resource: "*"
+              - Sid: EKSReadOnly
+                Effect: Allow
+                Action:
+                  - eks:ListClusters
+                  - eks:DescribeCluster
+                  - eks:ListNodegroups
+                  - eks:DescribeNodegroup
+                  - eks:ListTagsForResource
+                Resource: "*"
+              - Sid: CloudFrontReadOnly
+                Effect: Allow
+                Action:
+                  - cloudfront:ListDistributions
+                  - cloudfront:ListTagsForResource
+                Resource: "*"
               - Sid: TaggingAPI
                 Effect: Allow
                 Action:
@@ -668,7 +696,7 @@ Resources:
             echo "=== Lifecycle Tracker Setup ==="
             echo "Started: $(date)"
 
-            # ── Signal helper ──
+            # -- Signal helper --
             # Uses AWS CLI signal-resource instead of aws-cfn-bootstrap.
             # aws-cfn-bootstrap is incompatible with Python 3.12 (Ubuntu 24.04).
             # AWS CLI v2 supports cloudformation signal-resource natively.
@@ -695,7 +723,7 @@ Resources:
             export DEBIAN_FRONTEND=noninteractive
             export NEEDRESTART_MODE=a
 
-            # ── Step 1: Install packages (no awscli - not in Ubuntu 24.04 apt) ──
+            # -- Step 1: Install packages (no awscli - not in Ubuntu 24.04 apt) --
             echo "--- Installing packages ---"
             apt-get update -y
             apt-get install -y --no-install-recommends \
@@ -707,7 +735,7 @@ Resources:
               curl \
               python3
 
-            # ── Step 2: AWS CLI v2 via official binary ──
+            # -- Step 2: AWS CLI v2 via official binary --
             echo "--- Installing AWS CLI v2 ---"
             curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" \
               -o /tmp/awscliv2.zip
@@ -717,7 +745,7 @@ Resources:
             aws --version
             echo "AWS CLI installed"
 
-            # ── Step 3: Docker ──
+            # -- Step 3: Docker --
             echo "--- Configuring Docker ---"
             systemctl enable docker
             systemctl start docker
@@ -725,7 +753,7 @@ Resources:
             docker --version
             echo "Docker ready"
 
-            # ── Step 4: Clone repo ──
+            # -- Step 4: Clone repo --
             echo "--- Cloning repository ---"
             cd /home/ubuntu
             git clone https://github.com/ADITYANAIR01/aws-resource-lifecycle-tracker
@@ -733,7 +761,7 @@ Resources:
             chown -R ubuntu:ubuntu .
             echo "Repository cloned"
 
-            # ── Step 5: Fetch DB password from Secrets Manager ──
+            # -- Step 5: Fetch DB password from Secrets Manager --
             echo "--- Fetching credentials ---"
             DB_PASSWORD=$(aws secretsmanager get-secret-value \
               --secret-id "${DBSecret}" \
@@ -748,7 +776,7 @@ Resources:
             fi
             echo "Credentials fetched"
 
-            # ── Step 6: Write .env ──
+            # -- Step 6: Write .env --
             echo "--- Writing .env ---"
             cat > /home/ubuntu/aws-resource-lifecycle-tracker/.env << ENVEOF
             DB_HOST=${RDSInstance.Endpoint.Address}
@@ -774,7 +802,7 @@ Resources:
             ENVEOF
             echo ".env written"
 
-            # ── Step 7: Wait for RDS ──
+            # -- Step 7: Wait for RDS --
             echo "--- Waiting for RDS ---"
             for i in $(seq 1 30); do
               if PGPASSWORD="${!DB_PASSWORD}" psql \
@@ -794,7 +822,7 @@ Resources:
               sleep 10
             done
 
-            # ── Step 8: Apply schema ──
+            # -- Step 8: Apply schema --
             echo "--- Applying schema ---"
             PGPASSWORD="${!DB_PASSWORD}" psql \
               -h "${RDSInstance.Endpoint.Address}" \
@@ -803,13 +831,13 @@ Resources:
               -f /home/ubuntu/aws-resource-lifecycle-tracker/db/schema.sql
             echo "Schema applied"
 
-            # ── Step 9: Start containers ──
+            # -- Step 9: Start containers --
             echo "--- Starting containers ---"
             cd /home/ubuntu/aws-resource-lifecycle-tracker
             docker compose up -d --build
             echo "Containers started"
 
-            # ── Step 10: Health check ──
+            # -- Step 10: Health check --
             echo "--- Health check ---"
             for i in $(seq 1 18); do
               if curl -sf http://localhost:5000/health > /dev/null 2>&1; then
@@ -820,7 +848,7 @@ Resources:
               sleep 10
             done
 
-            # ── Done - signal SUCCESS ──
+            # -- Done - signal SUCCESS --
             echo "=== Setup Complete: $(date) ==="
             PUBLIC_IP=$(curl -s -H "X-aws-ec2-metadata-token: $IMDS_TOKEN" \
               http://169.254.169.254/latest/meta-data/public-ipv4)
