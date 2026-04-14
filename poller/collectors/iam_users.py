@@ -22,7 +22,7 @@ The actual alerting threshold is evaluated in Phase 5 alert engine —
 here we just store the raw last-activity date.
 """
 
-from datetime import datetime, timezone
+from datetime import timezone
 
 from collectors.base import BaseCollector
 
@@ -33,7 +33,7 @@ class IAMUserCollector(BaseCollector):
 
     def collect(self) -> list:
         # IAM is global — region stored as 'global'
-        client    = self._make_client("iam")
+        client = self._make_client("iam")
         resources = []
 
         self.logger.info("Collecting IAM users")
@@ -44,39 +44,38 @@ class IAMUserCollector(BaseCollector):
             for page in paginator.paginate():
                 for user in page.get("Users", []):
 
-                    username    = user["UserName"]
+                    username = user["UserName"]
                     create_time = user.get("CreateDate")
-                    user_arn    = user.get("Arn", "")
+                    user_arn = user.get("Arn", "")
 
                     # Get tags for this user
                     tags = self._fetch_user_tags(client, username)
 
                     # Get last activity across all access keys
-                    last_activity = self._get_last_activity(
-                        client, username, user
-                    )
+                    last_activity = self._get_last_activity(client, username, user)
 
                     # State based on whether we found any activity timestamp
                     state = "active" if last_activity else "inactive"
 
-                    resources.append({
-                        "resource_id":        user_arn or username,
-                        "resource_type":      self.RESOURCE_TYPE,
-                        "resource_name":      username,
-                        "account_id":         self.account_id,
-                        "region":             "global",
-                        "state":              state,
-                        "created_at":         create_time,
-                        "tags":               tags,
-                        "estimated_cost_usd": 0,
-                        "raw_api_response":   {
-                            **user,
-                            "last_activity": (
-                                last_activity.isoformat()
-                                if last_activity else None
-                            ),
-                        },
-                    })
+                    resources.append(
+                        {
+                            "resource_id": user_arn or username,
+                            "resource_type": self.RESOURCE_TYPE,
+                            "resource_name": username,
+                            "account_id": self.account_id,
+                            "region": "global",
+                            "state": state,
+                            "created_at": create_time,
+                            "tags": tags,
+                            "estimated_cost_usd": 0,
+                            "raw_api_response": {
+                                **user,
+                                "last_activity": (
+                                    last_activity.isoformat() if last_activity else None
+                                ),
+                            },
+                        }
+                    )
 
         except Exception as e:
             self.logger.error(f"IAM user collection failed: {e}")
@@ -106,21 +105,17 @@ class IAMUserCollector(BaseCollector):
                 if not key_id:
                     continue
                 try:
-                    used_response = client.get_access_key_last_used(
-                        AccessKeyId=key_id
+                    used_response = client.get_access_key_last_used(AccessKeyId=key_id)
+                    last_used = used_response.get("AccessKeyLastUsed", {}).get(
+                        "LastUsedDate"
                     )
-                    last_used = used_response.get(
-                        "AccessKeyLastUsed", {}
-                    ).get("LastUsedDate")
                     if last_used:
                         timestamps.append(last_used)
                 except Exception:
                     # If we can't get last used for a key, skip it
                     pass
         except Exception as e:
-            self.logger.warning(
-                f"Could not fetch access keys for user {username}: {e}"
-            )
+            self.logger.warning(f"Could not fetch access keys for user {username}: {e}")
 
         if not timestamps:
             return None
@@ -140,7 +135,5 @@ class IAMUserCollector(BaseCollector):
             response = client.list_user_tags(UserName=username)
             return self._extract_tags(response.get("Tags", []))
         except Exception as e:
-            self.logger.warning(
-                f"Could not fetch tags for IAM user {username}: {e}"
-            )
+            self.logger.warning(f"Could not fetch tags for IAM user {username}: {e}")
             return {}

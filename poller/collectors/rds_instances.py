@@ -20,7 +20,7 @@ class RDSInstanceCollector(BaseCollector):
     _SKIP_STATES = {"deleted", "deleting"}
 
     def collect(self) -> list:
-        client    = self._make_client("rds")
+        client = self._make_client("rds")
         resources = []
 
         self.logger.info("Collecting RDS instances")
@@ -36,27 +36,29 @@ class RDSInstanceCollector(BaseCollector):
                     if state in self._SKIP_STATES:
                         continue
 
-                    resource_id  = instance["DBInstanceIdentifier"]
+                    resource_id = instance["DBInstanceIdentifier"]
                     instance_arn = instance.get("DBInstanceArn", "")
-                    db_class     = instance.get("DBInstanceClass", "unknown")
-                    create_time  = instance.get("InstanceCreateTime")
-                    cost         = estimate_rds_cost(db_class, create_time)
+                    db_class = instance.get("DBInstanceClass", "unknown")
+                    create_time = instance.get("InstanceCreateTime")
+                    cost = estimate_rds_cost(db_class, create_time)
 
                     # Tags require a separate API call for RDS
                     tags = self._fetch_rds_tags(client, instance_arn)
 
-                    resources.append({
-                        "resource_id":        resource_id,
-                        "resource_type":      self.RESOURCE_TYPE,
-                        "resource_name":      resource_id,
-                        "account_id":         self.account_id,
-                        "region":             self.region,
-                        "state":              state,
-                        "created_at":         create_time,
-                        "tags":               tags,
-                        "estimated_cost_usd": cost,
-                        "raw_api_response":   instance,
-                    })
+                    resources.append(
+                        {
+                            "resource_id": resource_id,
+                            "resource_type": self.RESOURCE_TYPE,
+                            "resource_name": resource_id,
+                            "account_id": self.account_id,
+                            "region": self.region,
+                            "state": state,
+                            "created_at": create_time,
+                            "tags": tags,
+                            "estimated_cost_usd": cost,
+                            "raw_api_response": instance,
+                        }
+                    )
 
         except Exception as e:
             self.logger.error(f"RDS instance collection failed: {e}")

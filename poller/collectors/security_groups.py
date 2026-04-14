@@ -26,7 +26,7 @@ class SecurityGroupCollector(BaseCollector):
     RESOURCE_TYPE = "security_group"
 
     def collect(self) -> list:
-        client    = self._make_client("ec2")
+        client = self._make_client("ec2")
         resources = []
 
         self.logger.info("Collecting Security Groups")
@@ -44,11 +44,11 @@ class SecurityGroupCollector(BaseCollector):
             for page in paginator.paginate():
                 for sg in page.get("SecurityGroups", []):
 
-                    sg_id    = sg["GroupId"]
-                    sg_name  = sg.get("GroupName", sg_id)
+                    sg_id = sg["GroupId"]
+                    sg_name = sg.get("GroupName", sg_id)
                     tags_raw = sg.get("Tags", [])
-                    tags     = self._extract_tags(tags_raw)
-                    name     = self._extract_name(tags_raw, sg_name)
+                    tags = self._extract_tags(tags_raw)
+                    name = self._extract_name(tags_raw, sg_name)
 
                     # Default SG cannot be deleted — mark as in-use always
                     if sg_name == "default":
@@ -56,18 +56,20 @@ class SecurityGroupCollector(BaseCollector):
                     else:
                         state = "in-use" if sg_id in in_use_sg_ids else "unused"
 
-                    resources.append({
-                        "resource_id":        sg_id,
-                        "resource_type":      self.RESOURCE_TYPE,
-                        "resource_name":      name,
-                        "account_id":         self.account_id,
-                        "region":             self.region,
-                        "state":              state,
-                        "created_at":         None,
-                        "tags":               tags,
-                        "estimated_cost_usd": 0,
-                        "raw_api_response":   sg,
-                    })
+                    resources.append(
+                        {
+                            "resource_id": sg_id,
+                            "resource_type": self.RESOURCE_TYPE,
+                            "resource_name": name,
+                            "account_id": self.account_id,
+                            "region": self.region,
+                            "state": state,
+                            "created_at": None,
+                            "tags": tags,
+                            "estimated_cost_usd": 0,
+                            "raw_api_response": sg,
+                        }
+                    )
 
         except Exception as e:
             self.logger.error(f"Security group collection failed: {e}")

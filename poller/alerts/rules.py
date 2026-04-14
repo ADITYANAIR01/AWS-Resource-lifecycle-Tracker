@@ -35,13 +35,11 @@ def _required_tags() -> list:
 # =============================================================================
 
 ALERT_RULES = [
-
     # -------------------------------------------------------------------------
     # Age-based
     # -------------------------------------------------------------------------
-
     {
-        "type":     "ec2_long_running",
+        "type": "ec2_long_running",
         "severity": "warning",
         "query": """
             SELECT resource_id, resource_type, resource_name,
@@ -52,18 +50,15 @@ ALERT_RULES = [
               AND is_active     = TRUE
               AND created_at    < NOW() - INTERVAL '%s days'
         """,
-        "get_params": lambda: (
-            _days("ALERT_EC2_RUNNING_DAYS", 30),
-        ),
+        "get_params": lambda: (_days("ALERT_EC2_RUNNING_DAYS", 30),),
         "message_fn": lambda row: (
             f"EC2 instance {row['resource_name']} has been running for more than "
             f"{_days('ALERT_EC2_RUNNING_DAYS', 30)} days. "
             f"Verify this is intentional."
         ),
     },
-
     {
-        "type":     "ec2_stopped_too_long",
+        "type": "ec2_stopped_too_long",
         "severity": "info",
         "query": """
             SELECT resource_id, resource_type, resource_name,
@@ -74,18 +69,15 @@ ALERT_RULES = [
               AND is_active     = TRUE
               AND last_modified < NOW() - INTERVAL '%s days'
         """,
-        "get_params": lambda: (
-            _days("ALERT_EC2_STOPPED_DAYS", 7),
-        ),
+        "get_params": lambda: (_days("ALERT_EC2_STOPPED_DAYS", 7),),
         "message_fn": lambda row: (
             f"EC2 instance {row['resource_name']} has been stopped for more than "
             f"{_days('ALERT_EC2_STOPPED_DAYS', 7)} days. "
             f"EBS volumes are still incurring charges. Consider terminating if unused."
         ),
     },
-
     {
-        "type":     "ebs_unattached",
+        "type": "ebs_unattached",
         "severity": "warning",
         "query": """
             SELECT resource_id, resource_type, resource_name,
@@ -96,18 +88,15 @@ ALERT_RULES = [
               AND is_active     = TRUE
               AND last_modified < NOW() - INTERVAL '%s days'
         """,
-        "get_params": lambda: (
-            _days("ALERT_EBS_UNATTACHED_DAYS", 7),
-        ),
+        "get_params": lambda: (_days("ALERT_EBS_UNATTACHED_DAYS", 7),),
         "message_fn": lambda row: (
             f"EBS volume {row['resource_name']} has been unattached for more than "
             f"{_days('ALERT_EBS_UNATTACHED_DAYS', 7)} days. "
             f"You are being billed for storage with no attached instance."
         ),
     },
-
     {
-        "type":     "ebs_snapshot_old",
+        "type": "ebs_snapshot_old",
         "severity": "info",
         "query": """
             SELECT resource_id, resource_type, resource_name,
@@ -117,18 +106,15 @@ ALERT_RULES = [
               AND is_active     = TRUE
               AND created_at    < NOW() - INTERVAL '%s days'
         """,
-        "get_params": lambda: (
-            _days("ALERT_EBS_SNAPSHOT_AGE_DAYS", 60),
-        ),
+        "get_params": lambda: (_days("ALERT_EBS_SNAPSHOT_AGE_DAYS", 60),),
         "message_fn": lambda row: (
             f"EBS snapshot {row['resource_name']} is more than "
             f"{_days('ALERT_EBS_SNAPSHOT_AGE_DAYS', 60)} days old. "
             f"Review if this snapshot is still needed."
         ),
     },
-
     {
-        "type":     "rds_stopped_too_long",
+        "type": "rds_stopped_too_long",
         "severity": "critical",
         "query": """
             SELECT resource_id, resource_type, resource_name,
@@ -139,18 +125,15 @@ ALERT_RULES = [
               AND is_active     = TRUE
               AND last_modified < NOW() - INTERVAL '%s days'
         """,
-        "get_params": lambda: (
-            _days("ALERT_RDS_STOPPED_DAYS", 7),
-        ),
+        "get_params": lambda: (_days("ALERT_RDS_STOPPED_DAYS", 7),),
         "message_fn": lambda row: (
             f"RDS instance {row['resource_name']} has been stopped for more than "
             f"{_days('ALERT_RDS_STOPPED_DAYS', 7)} days. "
             f"AWS will automatically restart it after 7 days and resume billing."
         ),
     },
-
     {
-        "type":     "rds_snapshot_old",
+        "type": "rds_snapshot_old",
         "severity": "info",
         "query": """
             SELECT resource_id, resource_type, resource_name,
@@ -160,18 +143,15 @@ ALERT_RULES = [
               AND is_active     = TRUE
               AND created_at    < NOW() - INTERVAL '%s days'
         """,
-        "get_params": lambda: (
-            _days("ALERT_RDS_SNAPSHOT_AGE_DAYS", 30),
-        ),
+        "get_params": lambda: (_days("ALERT_RDS_SNAPSHOT_AGE_DAYS", 30),),
         "message_fn": lambda row: (
             f"RDS snapshot {row['resource_name']} is more than "
             f"{_days('ALERT_RDS_SNAPSHOT_AGE_DAYS', 30)} days old. "
             f"Review if this snapshot is still needed."
         ),
     },
-
     {
-        "type":     "iam_user_inactive",
+        "type": "iam_user_inactive",
         "severity": "warning",
         "query": """
             SELECT resource_id, resource_type, resource_name,
@@ -184,18 +164,15 @@ ALERT_RULES = [
                   OR last_modified < NOW() - INTERVAL '%s days'
               )
         """,
-        "get_params": lambda: (
-            _days("ALERT_IAM_INACTIVE_DAYS", 90),
-        ),
+        "get_params": lambda: (_days("ALERT_IAM_INACTIVE_DAYS", 90),),
         "message_fn": lambda row: (
             f"IAM user {row['resource_name']} has had no activity for more than "
             f"{_days('ALERT_IAM_INACTIVE_DAYS', 90)} days. "
             f"Inactive users with active access keys are a security risk."
         ),
     },
-
     {
-        "type":     "cloudwatch_alarm_stale",
+        "type": "cloudwatch_alarm_stale",
         "severity": "info",
         "query": """
             SELECT resource_id, resource_type, resource_name,
@@ -206,9 +183,7 @@ ALERT_RULES = [
               AND is_active     = TRUE
               AND last_modified < NOW() - INTERVAL '%s days'
         """,
-        "get_params": lambda: (
-            _days("ALERT_CW_ALARM_STALE_DAYS", 7),
-        ),
+        "get_params": lambda: (_days("ALERT_CW_ALARM_STALE_DAYS", 7),),
         "message_fn": lambda row: (
             f"CloudWatch alarm {row['resource_name']} has been in "
             f"INSUFFICIENT_DATA state for more than "
@@ -216,13 +191,11 @@ ALERT_RULES = [
             f"The metric it monitors may no longer exist."
         ),
     },
-
     # -------------------------------------------------------------------------
     # State-based
     # -------------------------------------------------------------------------
-
     {
-        "type":     "elastic_ip_unassociated",
+        "type": "elastic_ip_unassociated",
         "severity": "critical",
         "query": """
             SELECT resource_id, resource_type, resource_name,
@@ -239,9 +212,8 @@ ALERT_RULES = [
             f"Associate it or release it to stop charges."
         ),
     },
-
     {
-        "type":     "security_group_unused",
+        "type": "security_group_unused",
         "severity": "info",
         "query": """
             SELECT resource_id, resource_type, resource_name,
@@ -258,7 +230,6 @@ ALERT_RULES = [
             f"and make auditing harder."
         ),
     },
-
     # -------------------------------------------------------------------------
     # Tag-based — checked per required tag key
     # These are built dynamically in the evaluator since the required tag

@@ -37,7 +37,7 @@ def send_alert(alert: dict) -> bool:
     Returns True if sent successfully, False if SNS call failed.
     """
     topic_arn = os.environ.get("SNS_TOPIC_ARN", "")
-    region    = os.environ.get("AWS_REGION", "ap-south-1")
+    region = os.environ.get("AWS_REGION", "ap-south-1")
 
     if not topic_arn:
         logger.warning(
@@ -80,7 +80,7 @@ def send_resolution(alert: dict) -> bool:
     Send an SNS notification when an alert auto-resolves.
     """
     topic_arn = os.environ.get("SNS_TOPIC_ARN", "")
-    region    = os.environ.get("AWS_REGION", "ap-south-1")
+    region = os.environ.get("AWS_REGION", "ap-south-1")
 
     if not topic_arn:
         return False
@@ -123,7 +123,7 @@ def send_poller_failure(status: str, error_log: str) -> bool:
     Send an SNS notification when the poller itself fails or partially fails.
     """
     topic_arn = os.environ.get("SNS_TOPIC_ARN", "")
-    region    = os.environ.get("AWS_REGION", "ap-south-1")
+    region = os.environ.get("AWS_REGION", "ap-south-1")
 
     if not topic_arn:
         return False
@@ -156,6 +156,7 @@ def send_poller_failure(status: str, error_log: str) -> bool:
 # Private helpers
 # ---------------------------------------------------------------------------
 
+
 def _build_subject(alert: dict) -> str:
     severity = alert["severity"].upper()
     alert_type = alert["alert_type"].replace("_", " ").title()
@@ -164,15 +165,15 @@ def _build_subject(alert: dict) -> str:
 
 
 def _build_message(alert: dict) -> str:
-    severity    = alert["severity"].upper()
-    alert_type  = alert["alert_type"].replace("_", " ").title()
+    severity = alert["severity"].upper()
+    alert_type = alert["alert_type"].replace("_", " ").title()
     resource_id = alert["resource_id"]
-    resource    = alert.get("resource_name", resource_id)
-    rtype       = alert["resource_type"]
-    account     = alert.get("account_id", "unknown")
-    region      = alert.get("region", "unknown")
-    message     = alert["message"]
-    alert_id    = alert.get("id", "")
+    resource = alert.get("resource_name", resource_id)
+    rtype = alert["resource_type"]
+    account = alert.get("account_id", "unknown")
+    region = alert.get("region", "unknown")
+    message = alert["message"]
+    alert_id = alert.get("id", "")
 
     return (
         f"[{severity}] {alert_type}\n\n"

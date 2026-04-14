@@ -20,11 +20,12 @@ from psycopg2 import pool
 from flask import g
 
 import logging
+
 logger = logging.getLogger("app.db")
 
 _connection_pool = None
 
-_STARTUP_RETRIES   = 10
+_STARTUP_RETRIES = 10
 _STARTUP_RETRY_DELAY = 3
 
 
@@ -37,10 +38,10 @@ def init_pool() -> None:
     global _connection_pool
 
     db_config = {
-        "host":     os.environ["DB_HOST"],
-        "port":     int(os.environ.get("DB_PORT", 5432)),
-        "dbname":   os.environ["DB_NAME"],
-        "user":     os.environ["DB_USER"],
+        "host": os.environ["DB_HOST"],
+        "port": int(os.environ.get("DB_PORT", 5432)),
+        "dbname": os.environ["DB_NAME"],
+        "user": os.environ["DB_USER"],
         "password": os.environ["DB_PASSWORD"],
     }
 

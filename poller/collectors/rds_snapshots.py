@@ -20,7 +20,7 @@ class RDSSnapshotCollector(BaseCollector):
     _SKIP_STATES = {"deleted", "deleting"}
 
     def collect(self) -> list:
-        client    = self._make_client("rds")
+        client = self._make_client("rds")
         resources = []
 
         self.logger.info("Collecting RDS snapshots (manual only)")
@@ -37,26 +37,28 @@ class RDSSnapshotCollector(BaseCollector):
                     if state in self._SKIP_STATES:
                         continue
 
-                    resource_id   = snapshot["DBSnapshotIdentifier"]
-                    snapshot_arn  = snapshot.get("DBSnapshotArn", "")
-                    create_time   = snapshot.get("SnapshotCreateTime")
-                    size_gb       = snapshot.get("AllocatedStorage", 0)
-                    cost          = estimate_ebs_snapshot_cost(size_gb, create_time)
+                    resource_id = snapshot["DBSnapshotIdentifier"]
+                    snapshot_arn = snapshot.get("DBSnapshotArn", "")
+                    create_time = snapshot.get("SnapshotCreateTime")
+                    size_gb = snapshot.get("AllocatedStorage", 0)
+                    cost = estimate_ebs_snapshot_cost(size_gb, create_time)
 
                     tags = self._fetch_rds_tags(client, snapshot_arn)
 
-                    resources.append({
-                        "resource_id":        resource_id,
-                        "resource_type":      self.RESOURCE_TYPE,
-                        "resource_name":      resource_id,
-                        "account_id":         self.account_id,
-                        "region":             self.region,
-                        "state":              state,
-                        "created_at":         create_time,
-                        "tags":               tags,
-                        "estimated_cost_usd": cost,
-                        "raw_api_response":   snapshot,
-                    })
+                    resources.append(
+                        {
+                            "resource_id": resource_id,
+                            "resource_type": self.RESOURCE_TYPE,
+                            "resource_name": resource_id,
+                            "account_id": self.account_id,
+                            "region": self.region,
+                            "state": state,
+                            "created_at": create_time,
+                            "tags": tags,
+                            "estimated_cost_usd": cost,
+                            "raw_api_response": snapshot,
+                        }
+                    )
 
         except Exception as e:
             self.logger.error(f"RDS snapshot collection failed: {e}")

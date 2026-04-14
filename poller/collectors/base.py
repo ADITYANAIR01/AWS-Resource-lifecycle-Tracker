@@ -46,10 +46,10 @@ class BaseCollector:
             raise NotImplementedError(
                 f"{self.__class__.__name__} must set RESOURCE_TYPE"
             )
-        self.session    = session
+        self.session = session
         self.account_id = account_id
-        self.region     = region
-        self.logger     = get_logger(f"poller.collectors.{self.RESOURCE_TYPE}")
+        self.region = region
+        self.logger = get_logger(f"poller.collectors.{self.RESOURCE_TYPE}")
 
     # -------------------------------------------------------------------------
     # Interface
@@ -61,9 +61,7 @@ class BaseCollector:
         Must be implemented by every subclass.
         Must never return None — return [] if no resources found.
         """
-        raise NotImplementedError(
-            f"{self.__class__.__name__} must implement collect()"
-        )
+        raise NotImplementedError(f"{self.__class__.__name__} must implement collect()")
 
     # -------------------------------------------------------------------------
     # boto3 helpers
@@ -96,18 +94,14 @@ class BaseCollector:
         """
         if not tags_raw:
             return {}
-        return {
-            t["Key"]: t["Value"]
-            for t in tags_raw
-            if "Key" in t and "Value" in t
-        }
+        return {t["Key"]: t["Value"] for t in tags_raw if "Key" in t and "Value" in t}
 
     def _extract_name(self, tags_raw: list, fallback: str) -> str:
         """
         Find the 'Name' tag value from a boto3 tag list.
         Returns fallback (usually the resource ID) if no Name tag exists.
         """
-        for tag in (tags_raw or []):
+        for tag in tags_raw or []:
             if tag.get("Key") == "Name":
                 return tag.get("Value") or fallback
         return fallback

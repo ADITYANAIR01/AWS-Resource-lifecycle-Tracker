@@ -18,7 +18,7 @@ class EBSSnapshotCollector(BaseCollector):
     RESOURCE_TYPE = "ebs_snapshot"
 
     def collect(self) -> list:
-        client    = self._make_client("ec2")
+        client = self._make_client("ec2")
         resources = []
 
         self.logger.info("Collecting EBS snapshots")
@@ -32,26 +32,28 @@ class EBSSnapshotCollector(BaseCollector):
                 for snapshot in page.get("Snapshots", []):
 
                     resource_id = snapshot["SnapshotId"]
-                    tags_raw    = snapshot.get("Tags", [])
-                    tags        = self._extract_tags(tags_raw)
-                    name        = self._extract_name(tags_raw, resource_id)
-                    state       = snapshot.get("State", "unknown")
-                    start_time  = snapshot.get("StartTime")
-                    size_gb     = snapshot.get("VolumeSize", 0)
-                    cost        = estimate_ebs_snapshot_cost(size_gb, start_time)
+                    tags_raw = snapshot.get("Tags", [])
+                    tags = self._extract_tags(tags_raw)
+                    name = self._extract_name(tags_raw, resource_id)
+                    state = snapshot.get("State", "unknown")
+                    start_time = snapshot.get("StartTime")
+                    size_gb = snapshot.get("VolumeSize", 0)
+                    cost = estimate_ebs_snapshot_cost(size_gb, start_time)
 
-                    resources.append({
-                        "resource_id":        resource_id,
-                        "resource_type":      self.RESOURCE_TYPE,
-                        "resource_name":      name,
-                        "account_id":         self.account_id,
-                        "region":             self.region,
-                        "state":              state,
-                        "created_at":         start_time,
-                        "tags":               tags,
-                        "estimated_cost_usd": cost,
-                        "raw_api_response":   snapshot,
-                    })
+                    resources.append(
+                        {
+                            "resource_id": resource_id,
+                            "resource_type": self.RESOURCE_TYPE,
+                            "resource_name": name,
+                            "account_id": self.account_id,
+                            "region": self.region,
+                            "state": state,
+                            "created_at": start_time,
+                            "tags": tags,
+                            "estimated_cost_usd": cost,
+                            "raw_api_response": snapshot,
+                        }
+                    )
 
         except Exception as e:
             self.logger.error(f"EBS snapshot collection failed: {e}")

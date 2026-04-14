@@ -24,18 +24,17 @@ logging.basicConfig(
 )
 logger = logging.getLogger("app.main")
 
-app  = Flask(__name__, static_folder="static", template_folder="templates")
+app = Flask(__name__, static_folder="static", template_folder="templates")
 auth = HTTPBasicAuth()
 
-DASHBOARD_USER     = os.environ.get("DASHBOARD_USER", "admin")
+DASHBOARD_USER = os.environ.get("DASHBOARD_USER", "admin")
 DASHBOARD_PASSWORD = os.environ.get("DASHBOARD_PASSWORD", "")
 
 if not DASHBOARD_PASSWORD:
     logger.warning("DASHBOARD_PASSWORD not set — routes unprotected in dev mode")
 
 _password_hash = (
-    generate_password_hash(DASHBOARD_PASSWORD)
-    if DASHBOARD_PASSWORD else None
+    generate_password_hash(DASHBOARD_PASSWORD) if DASHBOARD_PASSWORD else None
 )
 
 
@@ -62,6 +61,7 @@ app.register_blueprint(poller_bp)
 @app.before_request
 def require_auth():
     from flask import request
+
     if request.path == "/health":
         return None
     if request.path.startswith("/static/"):

@@ -20,7 +20,7 @@ class ElasticIPCollector(BaseCollector):
     RESOURCE_TYPE = "elastic_ip"
 
     def collect(self) -> list:
-        client    = self._make_client("ec2")
+        client = self._make_client("ec2")
         resources = []
 
         self.logger.info("Collecting Elastic IPs")
@@ -31,30 +31,32 @@ class ElasticIPCollector(BaseCollector):
             for address in response.get("Addresses", []):
 
                 allocation_id = address.get("AllocationId", address.get("PublicIp"))
-                public_ip     = address.get("PublicIp", allocation_id)
-                tags_raw      = address.get("Tags", [])
-                tags          = self._extract_tags(tags_raw)
-                name          = self._extract_name(tags_raw, public_ip)
+                public_ip = address.get("PublicIp", allocation_id)
+                tags_raw = address.get("Tags", [])
+                tags = self._extract_tags(tags_raw)
+                name = self._extract_name(tags_raw, public_ip)
 
                 # State based on whether associated with any resource
                 is_associated = "AssociationId" in address
-                state         = "associated" if is_associated else "unassociated"
+                state = "associated" if is_associated else "unassociated"
 
                 # Only unassociated EIPs incur cost
                 cost = estimate_elastic_ip_cost() if not is_associated else 0
 
-                resources.append({
-                    "resource_id":        allocation_id,
-                    "resource_type":      self.RESOURCE_TYPE,
-                    "resource_name":      name,
-                    "account_id":         self.account_id,
-                    "region":             self.region,
-                    "state":              state,
-                    "created_at":         None,
-                    "tags":               tags,
-                    "estimated_cost_usd": cost,
-                    "raw_api_response":   address,
-                })
+                resources.append(
+                    {
+                        "resource_id": allocation_id,
+                        "resource_type": self.RESOURCE_TYPE,
+                        "resource_name": name,
+                        "account_id": self.account_id,
+                        "region": self.region,
+                        "state": state,
+                        "created_at": None,
+                        "tags": tags,
+                        "estimated_cost_usd": cost,
+                        "raw_api_response": address,
+                    }
+                )
 
         except Exception as e:
             self.logger.error(f"Elastic IP collection failed: {e}")

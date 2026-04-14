@@ -42,19 +42,19 @@ def run_alert_evaluation(conn) -> dict:
         }
     """
     triggered = 0
-    resolved  = 0
+    resolved = 0
 
     try:
         # Step 1 — Evaluate standard rules
         for rule in ALERT_RULES:
             t, r = _evaluate_rule(conn, rule)
             triggered += t
-            resolved  += r
+            resolved += r
 
         # Step 2 — Evaluate tag rules (dynamic — one rule per required tag)
         t, r = _evaluate_tag_rules(conn)
         triggered += t
-        resolved  += r
+        resolved += r
 
         # Step 3 — Send SNS for new unnotified alerts
         _send_new_alert_notifications(conn)
@@ -63,8 +63,7 @@ def run_alert_evaluation(conn) -> dict:
         _send_resolution_notifications(conn)
 
         logger.info(
-            f"Alert evaluation complete — "
-            f"triggered={triggered} resolved={resolved}"
+            f"Alert evaluation complete — " f"triggered={triggered} resolved={resolved}"
         )
 
     except Exception as e:
@@ -77,15 +76,16 @@ def run_alert_evaluation(conn) -> dict:
 # Standard rule evaluation
 # ---------------------------------------------------------------------------
 
+
 def _evaluate_rule(conn, rule: dict) -> tuple:
     """
     Evaluate one alert rule.
     Returns (triggered_count, resolved_count).
     """
     alert_type = rule["type"]
-    severity   = rule["severity"]
-    triggered  = 0
-    resolved   = 0
+    severity = rule["severity"]
+    triggered = 0
+    resolved = 0
 
     try:
         # Get params for this rule's query
@@ -96,13 +96,12 @@ def _evaluate_rule(conn, rule: dict) -> tuple:
 
         # Build set of resource keys currently matching the rule
         matching_keys = {
-            (row["resource_id"], row["resource_type"])
-            for row in matching_rows
+            (row["resource_id"], row["resource_type"]) for row in matching_rows
         }
 
         # Insert new alerts for resources not already alerted
         for row in matching_rows:
-            resource_id   = row["resource_id"]
+            resource_id = row["resource_id"]
             resource_type = row["resource_type"]
 
             # Deduplication check — skip if open alert already exists
@@ -140,8 +139,7 @@ def _evaluate_rule(conn, rule: dict) -> tuple:
 
     except Exception as e:
         logger.error(
-            f"Rule evaluation failed for type={alert_type}: {e}",
-            exc_info=True
+            f"Rule evaluation failed for type={alert_type}: {e}", exc_info=True
         )
 
     return triggered, resolved
@@ -151,26 +149,96 @@ def _evaluate_rule(conn, rule: dict) -> tuple:
 # Tag rule evaluation — dynamic per required tag key
 # ---------------------------------------------------------------------------
 
+
 def _evaluate_tag_rules(conn) -> tuple:
-    """
-    Evaluate tag compliance rules.
+    """Evaluate tag compliance rules.
+
     Disabled by default — opt-in via ALERT_TAGS_ENABLED=true in .env.
-    One rule per required tag key — all resource types except snapshots.
+    One rule per required tag key.
+
     Returns (triggered_count, resolved_count).
     """
     tags_enabled = os.environ.get("ALERT_TAGS_ENABLED", "false").lower() == "true"
     if not tags_enabled:
         return 0, 0
 
-    triggered = 0
-    resolved  = 0
-
     required_tags = _required_tags()
+    if not required_tags:
+        return 0, 0
+
+    # Snapshots don't typically carry meaningful tags in this tracker.
+    skip_types = ("ebs_snapshot", "rds_snapshot")
+
+    query = """
+        SELECT resource_id, resource_type, resource_name,
+               account_id, region
+        FROM resources
+        WHERE is_active = TRUE
+          AND NOT (resource_type = ANY(%s))
+          AND (
+                tags IS NULL
+             OR tags = '{}'::jsonb
+             OR NOT (tags ? %s)
+             OR COALESCE(NULLIF(tags->>%s, ''), '') = ''
+          )
+    """
+
+    total_triggered = 0
+    total_resolved = 0
+
+    for tag_key in required_tags:
+        alert_type = f"missing_tag_{tag_key.lower()}"
+        severity = "info"
+
+        try:
+            params = (list(skip_types), tag_key, tag_key)
+            matching_rows = run_alert_query(conn, query, params)
+            matching_keys = {
+                (row["resource_id"], row["resource_type"]) for row in matching_rows
+            }
+
+            for row in matching_rows:
+                resource_id = row["resource_id"]
+                resource_type = row["resource_type"]
+
+                existing = get_open_alert(conn, resource_id, resource_type, alert_type)
+                if existing:
+                    continue
+
+                name = row.get("resource_name") or resource_id
+                message = (
+                    f"Resource {name} is missing required tag '{tag_key}'. "
+                    "Add it to improve ownership and cleanup hygiene."
+                )
+                insert_alert(
+                    conn,
+                    resource_id=resource_id,
+                    resource_type=resource_type,
+                    alert_type=alert_type,
+                    severity=severity,
+                    message=message,
+                )
+                total_triggered += 1
+
+            open_alerts = get_open_alerts_by_type(conn, alert_type)
+            for alert in open_alerts:
+                key = (alert["resource_id"], alert["resource_type"])
+                if key not in matching_keys:
+                    resolve_alert(conn, alert["id"])
+                    total_resolved += 1
+
+        except Exception as e:
+            logger.error(
+                f"Tag rule evaluation failed for key={tag_key}: {e}", exc_info=True
+            )
+
+    return total_triggered, total_resolved
 
 
 # ---------------------------------------------------------------------------
 # SNS notification dispatch
 # ---------------------------------------------------------------------------
+
 
 def _send_new_alert_notifications(conn) -> None:
     """

@@ -12,7 +12,6 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Optional
 
-import psycopg2
 from psycopg2.extras import Json, RealDictCursor
 
 from utils.logger import get_logger
@@ -23,6 +22,7 @@ logger = get_logger("poller.db.queries")
 # =============================================================================
 # Helpers
 # =============================================================================
+
 
 def _make_serializable(obj):
     """Convert boto3 response types to JSON-serializable equivalents."""
@@ -41,15 +41,18 @@ def _make_serializable(obj):
 # Poll Lock
 # =============================================================================
 
+
 def acquire_poll_lock(conn) -> bool:
     with conn.cursor() as cur:
-        cur.execute("""
+        cur.execute(
+            """
             SELECT id, started_at
             FROM poller_runs
             WHERE status = 'running'
             ORDER BY started_at DESC
             LIMIT 1
-        """)
+        """
+        )
         row = cur.fetchone()
 
         if row is None:
@@ -60,7 +63,7 @@ def acquire_poll_lock(conn) -> bool:
         if started_at.tzinfo is None:
             started_at = started_at.replace(tzinfo=timezone.utc)
 
-        now         = datetime.now(timezone.utc)
+        now = datetime.now(timezone.utc)
         age_minutes = (now - started_at).total_seconds() / 60
 
         if age_minutes < 30:
@@ -74,13 +77,16 @@ def acquire_poll_lock(conn) -> bool:
             f"Stale poll lock (run_id={run_id}, {age_minutes:.1f} min ago) "
             f"— marking failed and proceeding"
         )
-        cur.execute("""
+        cur.execute(
+            """
             UPDATE poller_runs
             SET status       = 'failed',
                 completed_at = NOW(),
                 error_log    = 'Marked failed by lock cleanup'
             WHERE id = %s
-        """, (run_id,))
+        """,
+            (run_id,),
+        )
         conn.commit()
         return True
 
@@ -89,13 +95,16 @@ def acquire_poll_lock(conn) -> bool:
 # Poller Run Tracking
 # =============================================================================
 
+
 def insert_poller_run(conn) -> int:
     with conn.cursor() as cur:
-        cur.execute("""
+        cur.execute(
+            """
             INSERT INTO poller_runs (status, started_at)
             VALUES ('running', NOW())
             RETURNING id
-        """)
+        """
+        )
         run_id = cur.fetchone()[0]
         conn.commit()
         return run_id
@@ -114,7 +123,8 @@ def update_poller_run(
     error_log: Optional[str] = None,
 ) -> None:
     with conn.cursor() as cur:
-        cur.execute("""
+        cur.execute(
+            """
             UPDATE poller_runs SET
                 status            = %s,
                 completed_at      = NOW(),
@@ -126,11 +136,19 @@ def update_poller_run(
                 alerts_resolved   = %s,
                 error_log         = %s
             WHERE id = %s
-        """, (
-            status, resources_found, resources_new, resources_updated,
-            resources_deleted, alerts_triggered, alerts_resolved,
-            error_log, run_id,
-        ))
+        """,
+            (
+                status,
+                resources_found,
+                resources_new,
+                resources_updated,
+                resources_deleted,
+                alerts_triggered,
+                alerts_resolved,
+                error_log,
+                run_id,
+            ),
+        )
         conn.commit()
 
 
@@ -138,11 +156,13 @@ def update_poller_run(
 # Resource Upsert
 # =============================================================================
 
+
 def insert_or_update_resource(conn, resource: dict) -> str:
     tags_json = Json(resource.get("tags") or {})
 
     with conn.cursor() as cur:
-        cur.execute("""
+        cur.execute(
+            """
             INSERT INTO resources (
                 resource_id, resource_type, resource_name,
                 account_id, region, state, created_at,
@@ -167,13 +187,19 @@ def insert_or_update_resource(conn, resource: dict) -> str:
                 is_active          = TRUE,
                 deleted_at         = NULL
             RETURNING (xmax = 0) AS was_inserted
-        """, (
-            resource["resource_id"], resource["resource_type"],
-            resource.get("resource_name"), resource["account_id"],
-            resource["region"], resource.get("state"),
-            resource.get("created_at"), tags_json,
-            resource.get("estimated_cost_usd", Decimal("0")),
-        ))
+        """,
+            (
+                resource["resource_id"],
+                resource["resource_type"],
+                resource.get("resource_name"),
+                resource["account_id"],
+                resource["region"],
+                resource.get("state"),
+                resource.get("created_at"),
+                tags_json,
+                resource.get("estimated_cost_usd", Decimal("0")),
+            ),
+        )
 
         was_inserted = cur.fetchone()[0]
         conn.commit()
@@ -184,21 +210,28 @@ def insert_or_update_resource(conn, resource: dict) -> str:
 # Snapshot History
 # =============================================================================
 
+
 def insert_resource_snapshot(conn, resource: dict) -> None:
     tags_json = Json(resource.get("tags") or {})
-    raw_json  = Json(_make_serializable(resource.get("raw_api_response") or {}))
+    raw_json = Json(_make_serializable(resource.get("raw_api_response") or {}))
 
     with conn.cursor() as cur:
-        cur.execute("""
+        cur.execute(
+            """
             INSERT INTO resource_snapshots (
                 resource_id, resource_type, polled_at,
                 state, tags, estimated_cost_usd, raw_api_response
             ) VALUES (%s, %s, NOW(), %s, %s, %s, %s)
-        """, (
-            resource["resource_id"], resource["resource_type"],
-            resource.get("state"), tags_json,
-            resource.get("estimated_cost_usd", Decimal("0")), raw_json,
-        ))
+        """,
+            (
+                resource["resource_id"],
+                resource["resource_type"],
+                resource.get("state"),
+                tags_json,
+                resource.get("estimated_cost_usd", Decimal("0")),
+                raw_json,
+            ),
+        )
         conn.commit()
 
 
@@ -206,12 +239,16 @@ def insert_resource_snapshot(conn, resource: dict) -> None:
 # Soft Delete
 # =============================================================================
 
+
 def get_active_resource_ids(conn, resource_type: str) -> set:
     with conn.cursor() as cur:
-        cur.execute("""
+        cur.execute(
+            """
             SELECT resource_id FROM resources
             WHERE resource_type = %s AND is_active = TRUE
-        """, (resource_type,))
+        """,
+            (resource_type,),
+        )
         return {row[0] for row in cur.fetchall()}
 
 
@@ -220,28 +257,30 @@ def soft_delete_resources(conn, resource_type: str, resource_ids: list) -> int:
         return 0
 
     with conn.cursor() as cur:
-        cur.execute("""
+        cur.execute(
+            """
             UPDATE resources
             SET is_active  = FALSE,
                 deleted_at = NOW()
             WHERE resource_type = %s
               AND resource_id   = ANY(%s)
               AND is_active     = TRUE
-        """, (resource_type, list(resource_ids)))
+        """,
+            (resource_type, list(resource_ids)),
+        )
 
         count = cur.rowcount
         conn.commit()
 
         if count > 0:
-            logger.info(
-                f"Soft deleted {count} {resource_type} resource(s)"
-            )
+            logger.info(f"Soft deleted {count} {resource_type} resource(s)")
         return count
 
 
 # =============================================================================
 # Alert Queries
 # =============================================================================
+
 
 def run_alert_query(conn, query: str, params: tuple) -> list:
     """
@@ -276,7 +315,8 @@ def get_open_alert(
     Returns the alert row as a dict, or None if not found.
     """
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
-        cur.execute("""
+        cur.execute(
+            """
             SELECT id, alert_type, severity, message
             FROM alerts
             WHERE resource_id   = %s
@@ -284,7 +324,9 @@ def get_open_alert(
               AND alert_type    = %s
               AND resolved_at IS NULL
             LIMIT 1
-        """, (resource_id, resource_type, alert_type))
+        """,
+            (resource_id, resource_type, alert_type),
+        )
         row = cur.fetchone()
         return dict(row) if row else None
 
@@ -299,13 +341,16 @@ def insert_alert(
 ) -> int:
     """Insert a new alert. Returns the new alert ID."""
     with conn.cursor() as cur:
-        cur.execute("""
+        cur.execute(
+            """
             INSERT INTO alerts (
                 resource_id, resource_type, alert_type,
                 severity, message, triggered_at, notified, acknowledged
             ) VALUES (%s, %s, %s, %s, %s, NOW(), FALSE, FALSE)
             RETURNING id
-        """, (resource_id, resource_type, alert_type, severity, message))
+        """,
+            (resource_id, resource_type, alert_type, severity, message),
+        )
         alert_id = cur.fetchone()[0]
         conn.commit()
         return alert_id
@@ -317,24 +362,30 @@ def get_open_alerts_by_type(conn, alert_type: str) -> list:
     Used by auto-resolve logic.
     """
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
-        cur.execute("""
+        cur.execute(
+            """
             SELECT id, resource_id, resource_type,
                    alert_type, severity, message
             FROM alerts
             WHERE alert_type    = %s
               AND resolved_at IS NULL
-        """, (alert_type,))
+        """,
+            (alert_type,),
+        )
         return [dict(row) for row in cur.fetchall()]
 
 
 def resolve_alert(conn, alert_id: int) -> None:
     """Mark an alert as resolved."""
     with conn.cursor() as cur:
-        cur.execute("""
+        cur.execute(
+            """
             UPDATE alerts
             SET resolved_at = NOW()
             WHERE id = %s
-        """, (alert_id,))
+        """,
+            (alert_id,),
+        )
         conn.commit()
 
 
@@ -345,7 +396,8 @@ def get_unnotified_alerts(conn) -> list:
     Joins to resources table to get name, account_id, region for the message.
     """
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
-        cur.execute("""
+        cur.execute(
+            """
             SELECT
                 a.id, a.resource_id, a.resource_type,
                 a.alert_type, a.severity, a.message,
@@ -357,16 +409,20 @@ def get_unnotified_alerts(conn) -> list:
             WHERE a.notified     = FALSE
               AND a.resolved_at IS NULL
             ORDER BY a.triggered_at ASC
-        """)
+        """
+        )
         return [dict(row) for row in cur.fetchall()]
 
 
 def mark_alert_notified(conn, alert_id: int) -> None:
     """Mark an alert as notified after SNS send."""
     with conn.cursor() as cur:
-        cur.execute("""
+        cur.execute(
+            """
             UPDATE alerts SET notified = TRUE WHERE id = %s
-        """, (alert_id,))
+        """,
+            (alert_id,),
+        )
         conn.commit()
 
 
@@ -378,7 +434,8 @@ def get_unnotified_resolutions(conn) -> list:
     since we reuse that flag — see mark_resolution_notified().
     """
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
-        cur.execute("""
+        cur.execute(
+            """
             SELECT
                 a.id, a.resource_id, a.resource_type,
                 a.alert_type, a.severity, a.message,
@@ -392,7 +449,8 @@ def get_unnotified_resolutions(conn) -> list:
               AND a.acknowledged  = FALSE
               AND a.resolved_at   > NOW() - INTERVAL '5 minutes'
             ORDER BY a.resolved_at ASC
-        """)
+        """
+        )
         return [dict(row) for row in cur.fetchall()]
 
 
@@ -402,32 +460,194 @@ def mark_resolution_notified(conn, alert_id: int) -> None:
     We use acknowledged=TRUE as the flag for this.
     """
     with conn.cursor() as cur:
-        cur.execute("""
+        cur.execute(
+            """
             UPDATE alerts SET acknowledged = TRUE WHERE id = %s
-        """, (alert_id,))
+        """,
+            (alert_id,),
+        )
         conn.commit()
 
 
 def get_alert_by_id(conn, alert_id: int) -> Optional[dict]:
     """Fetch a single alert by ID. Used by manage.py."""
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
-        cur.execute("""
+        cur.execute(
+            """
             SELECT * FROM alerts WHERE id = %s
-        """, (alert_id,))
+        """,
+            (alert_id,),
+        )
         row = cur.fetchone()
         return dict(row) if row else None
 
 
 def acknowledge_alert(conn, alert_id: int) -> bool:
-    """
-    Mark an alert as acknowledged by the user.
-    Returns True if a row was updated, False if alert not found.
+    """Mark an alert as acknowledged by the user.
+
+    Returns True if a row was updated, False if alert not found or already ack'd.
     """
     with conn.cursor() as cur:
-        cur.execute("""
+        cur.execute(
+            """
             UPDATE alerts SET acknowledged = TRUE
             WHERE id = %s AND acknowledged = FALSE
-        """, (alert_id,))
+        """,
+            (alert_id,),
+        )
         updated = cur.rowcount
         conn.commit()
         return updated > 0
+
+
+def resolve_alert_manual(conn, alert_id: int) -> bool:
+    """Manually resolve an alert by ID.
+
+    Returns True if a row was updated, False if not found or already resolved.
+    """
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            UPDATE alerts
+            SET resolved_at = NOW()
+            WHERE id = %s AND resolved_at IS NULL
+        """,
+            (alert_id,),
+        )
+        updated = cur.rowcount
+        conn.commit()
+        return updated > 0
+
+
+def list_alerts(
+    conn,
+    status: str = "active",
+    severity: Optional[str] = None,
+    alert_type: Optional[str] = None,
+    limit: int = 50,
+    offset: int = 0,
+) -> dict:
+    """List alerts for admin usage (manage.py).
+
+    Uses the same NULL-check pattern as the Flask API routes to avoid any
+    dynamic SQL construction.
+
+    status: active | resolved | all
+    """
+    with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        cur.execute(
+            """
+            SELECT COUNT(*) AS total
+            FROM alerts a
+            WHERE (%s IS NULL OR a.severity = %s)
+              AND (%s IS NULL OR a.alert_type = %s)
+              AND (CASE %s
+                   WHEN 'active'   THEN a.resolved_at IS NULL
+                   WHEN 'resolved' THEN a.resolved_at IS NOT NULL
+                   ELSE TRUE END)
+        """,
+            (
+                severity,
+                severity,
+                alert_type,
+                alert_type,
+                status,
+            ),
+        )
+        total = int(cur.fetchone()["total"])
+
+        cur.execute(
+            """
+            SELECT a.id, a.resource_id, a.resource_type,
+                   a.alert_type, a.severity, a.message,
+                   a.triggered_at, a.resolved_at, a.notified, a.acknowledged,
+                   r.resource_name, r.region
+            FROM alerts a
+            LEFT JOIN resources r
+              ON  a.resource_id   = r.resource_id
+              AND a.resource_type = r.resource_type
+            WHERE (%s IS NULL OR a.severity = %s)
+              AND (%s IS NULL OR a.alert_type = %s)
+              AND (CASE %s
+                   WHEN 'active'   THEN a.resolved_at IS NULL
+                   WHEN 'resolved' THEN a.resolved_at IS NOT NULL
+                   ELSE TRUE END)
+            ORDER BY a.triggered_at DESC
+            LIMIT %s OFFSET %s
+        """,
+            (
+                severity,
+                severity,
+                alert_type,
+                alert_type,
+                status,
+                limit,
+                offset,
+            ),
+        )
+        rows = [dict(r) for r in cur.fetchall()]
+
+    return {"alerts": rows, "total": total, "limit": limit, "offset": offset}
+
+
+def list_resources(
+    conn,
+    resource_type: Optional[str] = None,
+    state: Optional[str] = None,
+    region: Optional[str] = None,
+    limit: int = 50,
+    offset: int = 0,
+    active_only: bool = True,
+) -> dict:
+    """List resources for admin usage (manage.py)."""
+    with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        cur.execute(
+            """
+            SELECT COUNT(*) AS total
+            FROM resources r
+            WHERE (%s = FALSE OR r.is_active = TRUE)
+              AND (%s IS NULL OR r.resource_type = %s)
+              AND (%s IS NULL OR r.state = %s)
+              AND (%s IS NULL OR r.region = %s)
+        """,
+            (
+                active_only,
+                resource_type,
+                resource_type,
+                state,
+                state,
+                region,
+                region,
+            ),
+        )
+        total = int(cur.fetchone()["total"])
+
+        cur.execute(
+            """
+            SELECT r.resource_id, r.resource_type, r.resource_name,
+                   r.account_id, r.region, r.state, r.created_at,
+                   r.first_seen, r.last_seen, r.last_modified,
+                   r.tags, r.estimated_cost_usd, r.is_active, r.deleted_at
+            FROM resources r
+            WHERE (%s = FALSE OR r.is_active = TRUE)
+              AND (%s IS NULL OR r.resource_type = %s)
+              AND (%s IS NULL OR r.state = %s)
+              AND (%s IS NULL OR r.region = %s)
+            ORDER BY r.first_seen DESC
+            LIMIT %s OFFSET %s
+        """,
+            (
+                active_only,
+                resource_type,
+                resource_type,
+                state,
+                state,
+                region,
+                region,
+                limit,
+                offset,
+            ),
+        )
+        rows = [dict(r) for r in cur.fetchall()]
+
+    return {"resources": rows, "total": total, "limit": limit, "offset": offset}

@@ -25,15 +25,35 @@ from utils.logger import get_logger
 
 logger = get_logger("poller.export.generator")
 
-# Paths to static assets — mounted from app container via docker-compose volume
-_STATIC_DIR = os.environ.get("STATIC_DIR", "/home/appuser/static")
-_CSS_PATH    = os.path.join(_STATIC_DIR, "css", "dashboard.css")
-_JS_DIR      = os.path.join(_STATIC_DIR, "js")
+# Paths to static assets — mounted from app container via docker-compose volume.
+# When running outside Docker (e.g., via manage.py on the EC2 host), we fall
+# back to the repo's app/static directory.
+
+
+def _resolve_static_dir() -> str:
+    explicit = os.environ.get("STATIC_DIR")
+    if explicit:
+        return explicit
+
+    docker_default = "/home/appuser/static"
+    if os.path.isdir(docker_default):
+        return docker_default
+
+    repo_fallback = os.path.abspath(
+        os.path.join(os.path.dirname(__file__), "..", "..", "app", "static")
+    )
+    return repo_fallback
+
+
+_STATIC_DIR = _resolve_static_dir()
+_CSS_PATH = os.path.join(_STATIC_DIR, "css", "dashboard.css")
+_JS_DIR = os.path.join(_STATIC_DIR, "js")
 
 
 # ---------------------------------------------------------------------------
 # JSON serializer — handles datetime, Decimal
 # ---------------------------------------------------------------------------
+
 
 class _Encoder(json.JSONEncoder):
     def default(self, obj):
@@ -51,6 +71,7 @@ def _to_json(obj) -> str:
 # ---------------------------------------------------------------------------
 # Asset loading
 # ---------------------------------------------------------------------------
+
 
 def _read_file(path: str, fallback: str = "") -> str:
     try:
@@ -73,48 +94,58 @@ def _load_js(filename: str) -> str:
 # Data queries — same data that Flask API endpoints return
 # ---------------------------------------------------------------------------
 
+
 def _query_overview(conn) -> dict:
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
-        cur.execute("""
+        cur.execute(
+            """
             SELECT resource_type, COUNT(*) as count
             FROM resources WHERE is_active = TRUE
             GROUP BY resource_type ORDER BY count DESC
-        """)
+        """
+        )
         resources_by_type = [dict(r) for r in cur.fetchall()]
 
-        cur.execute("""
+        cur.execute(
+            """
             SELECT severity, COUNT(*) as count FROM alerts
             WHERE resolved_at IS NULL GROUP BY severity
-        """)
+        """
+        )
         alerts_by_severity = {r["severity"]: r["count"] for r in cur.fetchall()}
 
-        cur.execute("""
+        cur.execute(
+            """
             SELECT COALESCE(SUM(estimated_cost_usd), 0) as total
             FROM resources WHERE is_active = TRUE
-        """)
+        """
+        )
         total_cost = float(cur.fetchone()["total"])
 
-        cur.execute("""
+        cur.execute(
+            """
             SELECT id, status, started_at, completed_at,
                    resources_found, alerts_triggered, error_log
             FROM poller_runs ORDER BY started_at DESC LIMIT 1
-        """)
+        """
+        )
         row = cur.fetchone()
         last_run = dict(row) if row else None
 
     return {
-        "total_resources":    sum(r["count"] for r in resources_by_type),
-        "resources_by_type":  resources_by_type,
-        "total_alerts":       sum(alerts_by_severity.values()),
+        "total_resources": sum(r["count"] for r in resources_by_type),
+        "resources_by_type": resources_by_type,
+        "total_alerts": sum(alerts_by_severity.values()),
         "alerts_by_severity": alerts_by_severity,
-        "total_cost_usd":     round(total_cost, 2),
-        "last_run":           last_run,
+        "total_cost_usd": round(total_cost, 2),
+        "last_run": last_run,
     }
 
 
 def _query_resources(conn) -> dict:
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
-        cur.execute("""
+        cur.execute(
+            """
             SELECT resource_id, resource_type, resource_name,
                    account_id, region, state, created_at, first_seen,
                    last_seen, last_modified, tags, estimated_cost_usd,
@@ -122,19 +153,27 @@ def _query_resources(conn) -> dict:
             FROM resources WHERE is_active = TRUE
             ORDER BY first_seen DESC
             LIMIT 500
-        """)
+        """
+        )
         rows = []
         for r in cur.fetchall():
             d = dict(r)
             if d.get("estimated_cost_usd"):
                 d["estimated_cost_usd"] = float(d["estimated_cost_usd"])
             rows.append(d)
-    return {"resources": rows, "total": len(rows), "page": 1, "page_size": 500, "pages": 1}
+    return {
+        "resources": rows,
+        "total": len(rows),
+        "page": 1,
+        "page_size": 500,
+        "pages": 1,
+    }
 
 
 def _query_alerts(conn) -> dict:
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
-        cur.execute("""
+        cur.execute(
+            """
             SELECT a.id, a.resource_id, a.resource_type,
                    a.alert_type, a.severity, a.message,
                    a.triggered_at, a.resolved_at, a.acknowledged,
@@ -145,21 +184,24 @@ def _query_alerts(conn) -> dict:
                 AND a.resource_type = r.resource_type
             ORDER BY a.triggered_at DESC
             LIMIT 200
-        """)
+        """
+        )
         rows = [dict(r) for r in cur.fetchall()]
     return {"alerts": rows, "total": len(rows), "page": 1, "page_size": 200, "pages": 1}
 
 
 def _query_poller(conn) -> dict:
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
-        cur.execute("""
+        cur.execute(
+            """
             SELECT id, status, started_at, completed_at,
                    resources_found, resources_new, resources_updated,
                    resources_deleted, alerts_triggered, alerts_resolved,
                    error_log,
                    EXTRACT(EPOCH FROM (completed_at - started_at)) AS duration_seconds
             FROM poller_runs ORDER BY started_at DESC LIMIT 20
-        """)
+        """
+        )
         runs = []
         for row in cur.fetchall():
             r = dict(row)
@@ -169,9 +211,20 @@ def _query_poller(conn) -> dict:
     return {"runs": runs, "total": len(runs)}
 
 
+def get_snapshot_data(conn) -> dict:
+    """Return the full snapshot data bundle used for HTML + JSON export."""
+    return {
+        "overview": _query_overview(conn),
+        "resources": _query_resources(conn),
+        "alerts": _query_alerts(conn),
+        "poller": _query_poller(conn),
+    }
+
+
 # ---------------------------------------------------------------------------
 # HTML page builder
 # ---------------------------------------------------------------------------
+
 
 def _build_page(
     title: str,
@@ -190,16 +243,36 @@ def _build_page(
     data_json = _to_json(snapshot_data)
 
     nav_items = [
-        ("overview",  "Overview",       "M3 3h7v7H3V3zm0 11h7v7H3v-7zm11-11h7v7h-7V3zm0 11h7v7h-7v-7z"),
-        ("resources", "Resources",      "M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"),
-        ("alerts",    "Alerts",         "M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 0 1-3.46 0"),
-        ("poller",    "Poller Status",  "M23 4 23 10 17 10M1 20 1 14 7 14M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"),
+        (
+            "overview",
+            "Overview",
+            "M3 3h7v7H3V3zm0 11h7v7H3v-7zm11-11h7v7h-7V3zm0 11h7v7h-7v-7z",
+        ),
+        (
+            "resources",
+            "Resources",
+            "M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z",
+        ),
+        (
+            "alerts",
+            "Alerts",
+            "M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 0 1-3.46 0",
+        ),
+        (
+            "poller",
+            "Poller Status",
+            (
+                "M23 4 23 10 17 10M1 20 1 14 7 14"
+                "M3.51 9a9 9 0 0 1 14.85-3.36L23 10"
+                "M1 14l4.64 4.36A9 9 0 0 0 20.49 15"
+            ),
+        ),
     ]
 
     nav_html = ""
     for page_key, label, _ in nav_items:
         active_cls = "active" if page_key == active_page else ""
-        nav_html += f'''
+        nav_html += f"""
         <a href="{page_key}.html" class="nav-item {active_cls}">
           <span class="nav-icon">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
@@ -209,9 +282,9 @@ def _build_page(
             </svg>
           </span>
           <span>{label}</span>
-        </a>'''
+        </a>"""
 
-    return f'''<!DOCTYPE html>
+    return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -265,15 +338,16 @@ def _build_page(
   <script>{page_js}</script>
 
 </body>
-</html>'''
+</html>"""
 
 
 # ---------------------------------------------------------------------------
 # Body HTML per page — same structure as live templates
 # ---------------------------------------------------------------------------
 
+
 def _overview_body() -> str:
-    return '''
+    return """
 <div class="page-header">
   <div>
     <div class="page-title">Overview</div>
@@ -329,11 +403,11 @@ def _overview_body() -> str:
          style="width:100%;justify-content:center">View all alerts →</a>
     </div>
   </div>
-</div>'''
+</div>"""
 
 
 def _resources_body() -> str:
-    return '''
+    return """
 <div class="page-header">
   <div>
     <div class="page-title">Resources</div>
@@ -402,11 +476,11 @@ def _resources_body() -> str:
     <span id="resources-count">Loading...</span>
     <div class="pagination" id="pagination"></div>
   </div>
-</div>'''
+</div>"""
 
 
 def _alerts_body() -> str:
-    return '''
+    return """
 <div class="page-header">
   <div>
     <div class="page-title">Alerts</div>
@@ -456,11 +530,11 @@ def _alerts_body() -> str:
     <span id="alerts-count">Loading...</span>
     <div class="pagination" id="alerts-pagination"></div>
   </div>
-</div>'''
+</div>"""
 
 
 def _poller_body() -> str:
-    return '''
+    return """
 <div class="page-header">
   <div>
     <div class="page-title">Poller Status</div>
@@ -492,7 +566,7 @@ def _poller_body() -> str:
   <div class="table-footer">
     <span id="poller-count">Loading...</span>
   </div>
-</div>'''
+</div>"""
 
 
 # ---------------------------------------------------------------------------
@@ -563,6 +637,7 @@ _SNAPSHOT_RESOURCES_EXTRA = """
 # Main generator function
 # ---------------------------------------------------------------------------
 
+
 def generate_snapshot(conn) -> dict:
     """
     Generate all snapshot pages.
@@ -573,35 +648,37 @@ def generate_snapshot(conn) -> dict:
         logger.info("Generating static snapshot")
 
         # Load assets
-        css      = _load_css()
+        css = _load_css()
         utils_js = _load_js("utils.js")
-        ov_js    = _load_js("overview.js")
-        res_js   = _load_js("resources.js")
-        al_js    = _load_js("alerts.js")
-        po_js    = _load_js("poller.js")
+        ov_js = _load_js("overview.js")
+        res_js = _load_js("resources.js")
+        al_js = _load_js("alerts.js")
+        po_js = _load_js("poller.js")
 
         if not css:
             logger.warning("dashboard.css not found — snapshot will have no styles")
 
         # Query all data
-        overview_data  = _query_overview(conn)
+        overview_data = _query_overview(conn)
         resources_data = _query_resources(conn)
-        alerts_data    = _query_alerts(conn)
-        poller_data    = _query_poller(conn)
+        alerts_data = _query_alerts(conn)
+        poller_data = _query_poller(conn)
 
         # Active alerts subset for overview panel
         active_alerts = {
             "alerts": [a for a in alerts_data["alerts"] if not a.get("resolved_at")],
-            "total":  sum(1 for a in alerts_data["alerts"] if not a.get("resolved_at")),
-            "page": 1, "page_size": 100, "pages": 1,
+            "total": sum(1 for a in alerts_data["alerts"] if not a.get("resolved_at")),
+            "page": 1,
+            "page_size": 100,
+            "pages": 1,
         }
 
         # Full snapshot data bundle
         snapshot_data = {
-            "overview":  overview_data,
+            "overview": overview_data,
             "resources": resources_data,
-            "alerts":    alerts_data,
-            "poller":    poller_data,
+            "alerts": alerts_data,
+            "poller": poller_data,
         }
 
         now = datetime.now(timezone.utc)

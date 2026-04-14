@@ -21,7 +21,7 @@ class S3Collector(BaseCollector):
 
     def collect(self) -> list:
         # S3 is global — no region needed for list_buckets
-        client    = self._make_client("s3")
+        client = self._make_client("s3")
         resources = []
 
         self.logger.info("Collecting S3 buckets")
@@ -30,7 +30,7 @@ class S3Collector(BaseCollector):
             response = client.list_buckets()
 
             for bucket in response.get("Buckets", []):
-                name        = bucket["Name"]
+                name = bucket["Name"]
                 create_time = bucket.get("CreationDate")
 
                 # Get actual bucket region
@@ -39,18 +39,20 @@ class S3Collector(BaseCollector):
                 # Get tags — NoSuchTagSet is expected for untagged buckets
                 tags = self._get_bucket_tags(client, name)
 
-                resources.append({
-                    "resource_id":        name,
-                    "resource_type":      self.RESOURCE_TYPE,
-                    "resource_name":      name,
-                    "account_id":         self.account_id,
-                    "region":             bucket_region,
-                    "state":              "active",
-                    "created_at":         create_time,
-                    "tags":               tags,
-                    "estimated_cost_usd": 0,
-                    "raw_api_response":   bucket,
-                })
+                resources.append(
+                    {
+                        "resource_id": name,
+                        "resource_type": self.RESOURCE_TYPE,
+                        "resource_name": name,
+                        "account_id": self.account_id,
+                        "region": bucket_region,
+                        "state": "active",
+                        "created_at": create_time,
+                        "tags": tags,
+                        "estimated_cost_usd": 0,
+                        "raw_api_response": bucket,
+                    }
+                )
 
         except Exception as e:
             self.logger.error(f"S3 collection failed: {e}")
@@ -71,9 +73,7 @@ class S3Collector(BaseCollector):
             # AWS returns None for us-east-1 (legacy behaviour)
             return location if location else "us-east-1"
         except Exception as e:
-            self.logger.warning(
-                f"Could not get region for bucket {bucket_name}: {e}"
-            )
+            self.logger.warning(f"Could not get region for bucket {bucket_name}: {e}")
             return "unknown"
 
     def _get_bucket_tags(self, client, bucket_name: str) -> dict:
@@ -89,12 +89,8 @@ class S3Collector(BaseCollector):
             if error_code == "NoSuchTagSet":
                 # Expected — bucket has no tags
                 return {}
-            self.logger.warning(
-                f"Could not get tags for bucket {bucket_name}: {e}"
-            )
+            self.logger.warning(f"Could not get tags for bucket {bucket_name}: {e}")
             return {}
         except Exception as e:
-            self.logger.warning(
-                f"Could not get tags for bucket {bucket_name}: {e}"
-            )
+            self.logger.warning(f"Could not get tags for bucket {bucket_name}: {e}")
             return {}

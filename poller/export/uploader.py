@@ -63,7 +63,7 @@ def upload_snapshot(pages: dict, snapshot_data: dict) -> bool:
         return False
 
     client = _get_client()
-    today  = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     errors = []
 
     # Upload HTML pages
@@ -132,13 +132,11 @@ def upload_snapshot(pages: dict, snapshot_data: dict) -> bool:
         return False
 
     total = len(pages) * 2 + 2  # latest + archive per page + 2 JSON files
-    logger.info(
-        f"Snapshot uploaded to s3://{bucket}/ — "
-        f"{total} objects written"
-    )
+    logger.info(f"Snapshot uploaded to s3://{bucket}/ — " f"{total} objects written")
+    region = os.environ.get("AWS_REGION", "ap-south-1")
     logger.info(
         f"Latest snapshot: "
-        f"https://{bucket}.s3.ap-south-1.amazonaws.com/latest/index.html"
+        f"https://{bucket}.s3.{region}.amazonaws.com/latest/index.html"
     )
     return True
 

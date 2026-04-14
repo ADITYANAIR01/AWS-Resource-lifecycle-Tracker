@@ -15,7 +15,8 @@ def get_poller_status():
     try:
         conn = get_connection()
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            cur.execute("""
+            cur.execute(
+                """
                 SELECT id, status, started_at, completed_at,
                        resources_found, resources_new, resources_updated,
                        resources_deleted, alerts_triggered, alerts_resolved,
@@ -24,7 +25,8 @@ def get_poller_status():
                            AS duration_seconds
                 FROM poller_runs
                 ORDER BY started_at DESC LIMIT 20
-            """)
+            """
+            )
             runs = []
             for row in cur.fetchall():
                 r = dict(row)

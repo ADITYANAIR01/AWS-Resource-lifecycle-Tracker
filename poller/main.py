@@ -78,15 +78,18 @@ def _get_collectors(session, account_id: str, region: str) -> list:
 
 def _run_collector(collector, conn) -> dict:
     counts = {
-        "found": 0, "new": 0, "updated": 0,
-        "deleted": 0, "errors": [],
+        "found": 0,
+        "new": 0,
+        "updated": 0,
+        "deleted": 0,
+        "errors": [],
     }
     resource_type = collector.RESOURCE_TYPE
 
     try:
-        db_active_ids    = get_active_resource_ids(conn, resource_type)
-        resources        = collector.collect()
-        counts["found"]  = len(resources)
+        db_active_ids = get_active_resource_ids(conn, resource_type)
+        resources = collector.collect()
+        counts["found"] = len(resources)
         aws_returned_ids = set()
 
         for resource in resources:
@@ -140,14 +143,17 @@ def _run_export(conn) -> None:
 
         # Build the data bundle for JSON export
         from export.generator import (
-            _query_overview, _query_resources,
-            _query_alerts, _query_poller,
+            _query_overview,
+            _query_resources,
+            _query_alerts,
+            _query_poller,
         )
+
         snapshot_data = {
-            "overview":  _query_overview(conn),
+            "overview": _query_overview(conn),
             "resources": _query_resources(conn),
-            "alerts":    _query_alerts(conn),
-            "poller":    _query_poller(conn),
+            "alerts": _query_alerts(conn),
+            "poller": _query_poller(conn),
         }
 
         success = upload_snapshot(pages, snapshot_data)
@@ -161,7 +167,7 @@ def _run_export(conn) -> None:
 
 
 def run_poll_cycle(session, account_id: str, region: str) -> None:
-    conn   = get_connection()
+    conn = get_connection()
     run_id = None
 
     try:
@@ -171,20 +177,20 @@ def run_poll_cycle(session, account_id: str, region: str) -> None:
         run_id = insert_poller_run(conn)
         logger.info(f"Poll cycle started — run_id={run_id}")
 
-        total_found   = 0
-        total_new     = 0
+        total_found = 0
+        total_new = 0
         total_updated = 0
         total_deleted = 0
-        all_errors    = []
+        all_errors = []
 
         for collector in _get_collectors(session, account_id, region):
             logger.info(f"Running collector: {collector.RESOURCE_TYPE}")
             counts = _run_collector(collector, conn)
-            total_found   += counts["found"]
-            total_new     += counts["new"]
+            total_found += counts["found"]
+            total_new += counts["new"]
             total_updated += counts["updated"]
             total_deleted += counts["deleted"]
-            all_errors    += counts["errors"]
+            all_errors += counts["errors"]
 
         collectors_count = len(_get_collectors(session, account_id, region))
         if len(all_errors) == 0:
@@ -235,7 +241,9 @@ def run_poll_cycle(session, account_id: str, region: str) -> None:
         if run_id is not None:
             try:
                 update_poller_run(
-                    conn, run_id=run_id, status="failed",
+                    conn,
+                    run_id=run_id,
+                    status="failed",
                     error_log=f"Unexpected error: {type(e).__name__}: {e}",
                 )
             except Exception:
@@ -260,9 +268,9 @@ def main() -> None:
         sys.exit(1)
 
     try:
-        session    = _get_aws_session()
+        session = _get_aws_session()
         account_id = _get_account_id(session)
-        region     = os.environ.get("AWS_REGION", "ap-south-1")
+        region = os.environ.get("AWS_REGION", "ap-south-1")
         logger.info(f"AWS session ready — account={account_id} region={region}")
     except Exception as e:
         logger.error(f"Could not establish AWS session: {e}")

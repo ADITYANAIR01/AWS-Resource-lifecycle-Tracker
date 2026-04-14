@@ -18,31 +18,38 @@ def resource_detail_page(resource_type, resource_id):
 @resources_bp.route("/api/resources")
 def list_resources():
     try:
-        conn      = get_connection()
+        conn = get_connection()
         page_size = int(request.args.get("page_size", 100))
-        page      = max(1, int(request.args.get("page", 1)))
-        offset    = (page - 1) * page_size
+        page = max(1, int(request.args.get("page", 1)))
+        offset = (page - 1) * page_size
 
-        filter_type   = request.args.get("type")
-        filter_state  = request.args.get("state")
+        filter_type = request.args.get("type")
+        filter_state = request.args.get("state")
         filter_region = request.args.get("region")
 
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             # Parameterized query with NULL-check pattern - no dynamic SQL construction
-            cur.execute("""
+            cur.execute(
+                """
                 SELECT COUNT(*) as total FROM resources
                 WHERE is_active = TRUE
                   AND (%s IS NULL OR resource_type = %s)
                   AND (%s IS NULL OR state = %s)
                   AND (%s IS NULL OR region = %s)
-            """, [
-                filter_type, filter_type,
-                filter_state, filter_state,
-                filter_region, filter_region
-            ])
+            """,
+                [
+                    filter_type,
+                    filter_type,
+                    filter_state,
+                    filter_state,
+                    filter_region,
+                    filter_region,
+                ],
+            )
             total = cur.fetchone()["total"]
 
-            cur.execute("""
+            cur.execute(
+                """
                 SELECT resource_id, resource_type, resource_name,
                        account_id, region, state, created_at, first_seen,
                        last_seen, last_modified, tags, estimated_cost_usd,
@@ -54,21 +61,29 @@ def list_resources():
                   AND (%s IS NULL OR region = %s)
                 ORDER BY first_seen DESC
                 LIMIT %s OFFSET %s
-            """, [
-                filter_type, filter_type,
-                filter_state, filter_state,
-                filter_region, filter_region,
-                page_size, offset
-            ])
+            """,
+                [
+                    filter_type,
+                    filter_type,
+                    filter_state,
+                    filter_state,
+                    filter_region,
+                    filter_region,
+                    page_size,
+                    offset,
+                ],
+            )
             rows = [_serialize(dict(r)) for r in cur.fetchall()]
 
-        return jsonify({
-            "resources": rows,
-            "total":     total,
-            "page":      page,
-            "page_size": page_size,
-            "pages":     max(1, (total + page_size - 1) // page_size),
-        })
+        return jsonify(
+            {
+                "resources": rows,
+                "total": total,
+                "page": page,
+                "page_size": page_size,
+                "pages": max(1, (total + page_size - 1) // page_size),
+            }
+        )
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -79,21 +94,27 @@ def get_resource(resource_type, resource_id):
         conn = get_connection()
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
 
-            cur.execute("""
+            cur.execute(
+                """
                 SELECT * FROM resources
                 WHERE resource_id = %s AND resource_type = %s
-            """, (resource_id, resource_type))
+            """,
+                (resource_id, resource_type),
+            )
             row = cur.fetchone()
             if not row:
                 return jsonify({"error": "Resource not found"}), 404
             resource = _serialize(dict(row))
 
-            cur.execute("""
+            cur.execute(
+                """
                 SELECT id, polled_at, state, tags, estimated_cost_usd
                 FROM resource_snapshots
                 WHERE resource_id = %s AND resource_type = %s
                 ORDER BY polled_at ASC
-            """, (resource_id, resource_type))
+            """,
+                (resource_id, resource_type),
+            )
             snapshots = []
             for s in cur.fetchall():
                 d = dict(s)
@@ -103,13 +124,16 @@ def get_resource(resource_type, resource_id):
                     d["estimated_cost_usd"] = float(d["estimated_cost_usd"])
                 snapshots.append(d)
 
-            cur.execute("""
+            cur.execute(
+                """
                 SELECT id, alert_type, severity, message,
                        triggered_at, resolved_at, acknowledged
                 FROM alerts
                 WHERE resource_id = %s AND resource_type = %s
                 ORDER BY triggered_at DESC
-            """, (resource_id, resource_type))
+            """,
+                (resource_id, resource_type),
+            )
             alerts = []
             for a in cur.fetchall():
                 d = dict(a)
@@ -119,11 +143,13 @@ def get_resource(resource_type, resource_id):
                     d["resolved_at"] = d["resolved_at"].isoformat()
                 alerts.append(d)
 
-        return jsonify({
-            "resource":  resource,
-            "snapshots": snapshots,
-            "alerts":    alerts,
-        })
+        return jsonify(
+            {
+                "resource": resource,
+                "snapshots": snapshots,
+                "alerts": alerts,
+            }
+        )
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 

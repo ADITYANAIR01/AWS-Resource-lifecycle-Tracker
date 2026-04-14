@@ -24,7 +24,7 @@ class EBSVolumeCollector(BaseCollector):
         """
         Collect all active EBS volumes via describe_volumes paginator.
         """
-        client    = self._make_client("ec2")
+        client = self._make_client("ec2")
         resources = []
 
         self.logger.info("Collecting EBS volumes")
@@ -41,26 +41,28 @@ class EBSVolumeCollector(BaseCollector):
                         continue
 
                     resource_id = volume["VolumeId"]
-                    tags_raw    = volume.get("Tags", [])
-                    tags        = self._extract_tags(tags_raw)
-                    name        = self._extract_name(tags_raw, resource_id)
-                    size_gb     = volume.get("Size", 0)
+                    tags_raw = volume.get("Tags", [])
+                    tags = self._extract_tags(tags_raw)
+                    name = self._extract_name(tags_raw, resource_id)
+                    size_gb = volume.get("Size", 0)
                     volume_type = volume.get("VolumeType", "gp2")
                     create_time = volume.get("CreateTime")
-                    cost        = estimate_ebs_volume_cost(size_gb, volume_type, create_time)
+                    cost = estimate_ebs_volume_cost(size_gb, volume_type, create_time)
 
-                    resources.append({
-                        "resource_id":        resource_id,
-                        "resource_type":      self.RESOURCE_TYPE,
-                        "resource_name":      name,
-                        "account_id":         self.account_id,
-                        "region":             self.region,
-                        "state":              state,
-                        "created_at":         create_time,
-                        "tags":               tags,
-                        "estimated_cost_usd": cost,
-                        "raw_api_response":   volume,
-                    })
+                    resources.append(
+                        {
+                            "resource_id": resource_id,
+                            "resource_type": self.RESOURCE_TYPE,
+                            "resource_name": name,
+                            "account_id": self.account_id,
+                            "region": self.region,
+                            "state": state,
+                            "created_at": create_time,
+                            "tags": tags,
+                            "estimated_cost_usd": cost,
+                            "raw_api_response": volume,
+                        }
+                    )
 
         except Exception as e:
             self.logger.error(f"EBS volume collection failed: {e}")
