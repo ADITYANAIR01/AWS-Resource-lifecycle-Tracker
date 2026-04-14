@@ -57,7 +57,7 @@ A self-hosted tool that monitors your AWS account and gives you a unified view o
 ## What It Tracks
 
 | Resource | API Used |
-|---|---|
+| --- | --- |
 | EC2 Instances | `describe_instances` |
 | EBS Volumes | `describe_volumes` |
 | EBS Snapshots | `describe_snapshots` |
@@ -68,12 +68,15 @@ A self-hosted tool that monitors your AWS account and gives you a unified view o
 | Security Groups | `describe_security_groups` |
 | IAM Users | `list_users` + `get_access_key_last_used` |
 | CloudWatch Alarms | `describe_alarms` |
+| ECS Services | `list_clusters` + `list_services` + `describe_services` |
+| EKS Clusters | `list_clusters` + `describe_cluster` + `describe_nodegroup` |
+| CloudFront Distributions | `list_distributions` + `list_tags_for_resource` |
 
 ---
 
 ## Architecture
 
-```
+```text
 EventBridge (scheduled)
       |
       v

@@ -21,6 +21,9 @@
     <option value="iam_user">IAM User</option>
     <option value="cloudwatch_alarm">CloudWatch Alarm</option>
     <option value="rds_snapshot">RDS Snapshot</option>
+    <option value="ecs">ECS</option>
+    <option value="eks">EKS</option>
+    <option value="cloudfront">CloudFront</option>
   </select>
   <select class="filter-select" id="filter-state" onchange="applyFilters()">
     <option value="">All States</option>
@@ -33,6 +36,10 @@
     <option value="unassociated">Unassociated</option>
     <option value="active">Active</option>
     <option value="inactive">Inactive</option>
+    <option value="pending">Pending</option>
+    <option value="failed">Failed</option>
+    <option value="deployed">Deployed</option>
+    <option value="inprogress">In Progress</option>
   </select>
   <select class="filter-select" id="filter-region" onchange="applyFilters()">
     <option value="">All Regions</option>

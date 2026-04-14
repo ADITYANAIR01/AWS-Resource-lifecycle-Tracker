@@ -24,6 +24,14 @@ def _days(env_var: str, default: int) -> int:
         return default
 
 
+def _minutes(env_var: str, default: int) -> int:
+    """Read a minute threshold from env, return default if invalid."""
+    try:
+        return int(os.environ.get(env_var, default))
+    except ValueError:
+        return default
+
+
 def _required_tags() -> list:
     """Read required tag keys from env."""
     raw = os.environ.get("REQUIRED_TAGS", "Owner,Project,Environment")
@@ -228,6 +236,68 @@ ALERT_RULES = [
             f"Security group {row['resource_name']} is not attached to any "
             f"resource. Unused security groups clutter your environment "
             f"and make auditing harder."
+        ),
+    },
+    {
+        "type": "ecs_service_unhealthy",
+        "severity": "warning",
+        "query": """
+            SELECT resource_id, resource_type, resource_name,
+                   account_id, region,
+                   COALESCE(NULLIF(tags->>'_desired_count', '')::INT, 0) AS desired_count,
+                   COALESCE(NULLIF(tags->>'_running_count', '')::INT, 0) AS running_count
+            FROM resources
+            WHERE resource_type = 'ecs'
+              AND is_active     = TRUE
+              AND COALESCE(NULLIF(tags->>'_desired_count', '')::INT, 0)
+                  <> COALESCE(NULLIF(tags->>'_running_count', '')::INT, 0)
+              AND COALESCE(last_modified, first_seen)
+                  < NOW() - INTERVAL '%s minutes'
+        """,
+        "get_params": lambda: (_minutes("ALERT_ECS_UNHEALTHY_MINS", 10),),
+        "message_fn": lambda row: (
+            f"ECS service {row['resource_name']} has desired count "
+            f"{row.get('desired_count', 0)} but running count "
+            f"{row.get('running_count', 0)} for more than "
+            f"{_minutes('ALERT_ECS_UNHEALTHY_MINS', 10)} minutes. "
+            f"Investigate task failures or capacity."
+        ),
+    },
+    {
+        "type": "eks_cluster_pending",
+        "severity": "warning",
+        "query": """
+            SELECT resource_id, resource_type, resource_name,
+                   account_id, region
+            FROM resources
+            WHERE resource_type = 'eks'
+              AND state         = 'PENDING'
+              AND is_active     = TRUE
+              AND COALESCE(created_at, first_seen)
+                  < NOW() - INTERVAL '%s minutes'
+        """,
+        "get_params": lambda: (_minutes("ALERT_EKS_PENDING_MINS", 30),),
+        "message_fn": lambda row: (
+            f"EKS cluster {row['resource_name']} has remained in PENDING state for "
+            f"more than {_minutes('ALERT_EKS_PENDING_MINS', 30)} minutes. "
+            f"Check control plane and nodegroup provisioning."
+        ),
+    },
+    {
+        "type": "cloudfront_disabled",
+        "severity": "info",
+        "query": """
+            SELECT resource_id, resource_type, resource_name,
+                   account_id, region
+            FROM resources
+            WHERE resource_type = 'cloudfront'
+              AND is_active     = TRUE
+              AND COALESCE(tags->>'_enabled', 'true') = 'false'
+        """,
+        "get_params": lambda: (),
+        "message_fn": lambda row: (
+            f"CloudFront distribution {row['resource_name']} is disabled. "
+            f"Confirm this is intentional to avoid stale CDN endpoints."
         ),
     },
     # -------------------------------------------------------------------------

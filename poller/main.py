@@ -20,6 +20,9 @@ from collectors.elastic_ips import ElasticIPCollector
 from collectors.security_groups import SecurityGroupCollector
 from collectors.iam_users import IAMUserCollector
 from collectors.cloudwatch_alarms import CloudWatchAlarmCollector
+from collectors.ecs import ECSCollector
+from collectors.eks import EKSCollector
+from collectors.cloudfront import CloudFrontCollector
 from alerts.evaluator import run_alert_evaluation
 from db.connection import close_pool, get_connection, init_pool, release_connection
 from db.queries import (
@@ -73,6 +76,9 @@ def _get_collectors(session, account_id: str, region: str) -> list:
         SecurityGroupCollector(session, account_id, region),
         IAMUserCollector(session, account_id, region),
         CloudWatchAlarmCollector(session, account_id, region),
+        ECSCollector(session, account_id, region),
+        EKSCollector(session, account_id, region),
+        CloudFrontCollector(session, account_id, region),
     ]
 
 

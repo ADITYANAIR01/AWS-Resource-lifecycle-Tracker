@@ -5,6 +5,7 @@ const TYPE_COLORS = {
   ebs_volume:'#34d399', ebs_snapshot:'#6ee7b7',
   elastic_ip:'#fb923c', security_group:'#94a3b8',
   iam_user:'#fbbf24', cloudwatch_alarm:'#f87171', rds_snapshot:'#c084fc',
+  ecs:'#8b5cf6', eks:'#6366f1', cloudfront:'#ec4899',
 };
 
 const TYPE_LABELS = {
@@ -12,6 +13,7 @@ const TYPE_LABELS = {
   ebs_volume:'EBS Volumes', ebs_snapshot:'EBS Snapshots',
   elastic_ip:'Elastic IPs', security_group:'Security Groups',
   iam_user:'IAM Users', cloudwatch_alarm:'CloudWatch Alarms', rds_snapshot:'RDS Snapshots',
+  ecs:'ECS Services', eks:'EKS Clusters', cloudfront:'CloudFront Distributions',
 };
 
 async function loadOverview() {

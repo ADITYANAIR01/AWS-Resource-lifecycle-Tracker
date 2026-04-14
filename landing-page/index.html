@@ -617,7 +617,7 @@ footer{
       <span class="accent">Before it costs you.</span>
     </h1>
     <p class="hero-sub">
-      Track all 10 AWS resource types, get intelligent alerts, generate static snapshots — and deploy for under $1/month.
+      Track all 13 AWS resource types, get intelligent alerts, generate static snapshots — and deploy for under $1/month.
     </p>
     <div class="hero-actions">
       <a href="#deploy" class="btn btn-primary">
@@ -735,7 +735,7 @@ footer{
     <div class="demo-header reveal">
       <div class="section-tag">Coverage</div>
       <h2>What gets tracked</h2>
-      <p>10 AWS resource types supported today. Click <strong style="color:var(--accent)">View Info</strong> to see what data is collected for each.</p>
+      <p>13 AWS resource types supported today. Click <strong style="color:var(--accent)">View Info</strong> to see what data is collected for each.</p>
     </div>
 
     <div class="services-grid reveal" id="services-grid">
@@ -848,11 +848,24 @@ footer{
         <span class="service-badge future">Future Integration</span>
       </div>
 
-      <div class="service-card future">
-        <div class="service-icon" style="background:rgba(30,41,59,.5);color:var(--text3)">📦</div>
-        <div class="service-name" style="color:var(--text2)">ECS / Fargate</div>
-        <div class="service-desc" style="color:var(--text3)">Cluster services, task definitions, container lifecycle tracking.</div>
-        <span class="service-badge future">Future Integration</span>
+      <div class="service-card supported">
+        <div class="service-icon" style="background:rgba(139,92,246,.08);color:#8b5cf6">📦</div>
+        <div class="service-name">ECS Services</div>
+        <div class="service-desc">Cluster/service health, launch type, desired vs running counts.</div>
+        <span class="service-badge live" onclick="toggleInfo(this)">View Info</span>
+        <div class="service-info-panel">
+          Collects via <code>list_clusters</code> + <code>list_services</code> + <code>describe_services</code>. Tracks launch type (EC2/Fargate), task definition family, desired/running counts, and service health.
+        </div>
+      </div>
+
+      <div class="service-card supported">
+        <div class="service-icon" style="background:rgba(99,102,241,.08);color:#6366f1">☸</div>
+        <div class="service-name">EKS Clusters</div>
+        <div class="service-desc">Control plane status, version, nodegroup size and instance types.</div>
+        <span class="service-badge live" onclick="toggleInfo(this)">View Info</span>
+        <div class="service-info-panel">
+          Collects via <code>list_clusters</code> + <code>describe_cluster</code> + <code>describe_nodegroup</code>. Tracks version, endpoint, cluster status, nodegroup capacity, and estimated control-plane + node cost.
+        </div>
       </div>
 
       <div class="service-card future">
@@ -869,11 +882,14 @@ footer{
         <span class="service-badge future">Future Integration</span>
       </div>
 
-      <div class="service-card future">
-        <div class="service-icon" style="background:rgba(30,41,59,.5);color:var(--text3)">🌍</div>
-        <div class="service-name" style="color:var(--text2)">CloudFront Distributions</div>
-        <div class="service-desc" style="color:var(--text3)">Distribution status, origins, cache behaviour tracking.</div>
-        <span class="service-badge future">Future Integration</span>
+      <div class="service-card supported">
+        <div class="service-icon" style="background:rgba(236,72,153,.08);color:#ec4899">🌍</div>
+        <div class="service-name">CloudFront Distributions</div>
+        <div class="service-desc">Deployment status, enabled flag, origin counts, and domain inventory.</div>
+        <span class="service-badge live" onclick="toggleInfo(this)">View Info</span>
+        <div class="service-info-panel">
+          Collects via <code>list_distributions</code> + <code>list_tags_for_resource</code>. Tracks distribution domain, status, enabled/disabled state, origins, and global region metadata.
+        </div>
       </div>
 
       <div class="service-card future">
@@ -1327,7 +1343,7 @@ const personas = {
     lastPoll: '1min ago',
     url: 'https://tracker.startup.io',
     stats: {
-      resources: {val: 47, color: 'var(--text)', sub: '10 resource types'},
+      resources: {val: 47, color: 'var(--text)', sub: '13 resource types'},
       alerts: {val: 8, color: 'var(--red)', sub: '2 critical · 6 warning'},
       cost: {val: '$3.40', color: 'var(--amber)', sub: 'this month'},
       poll: {val: 'SUCCESS', color: 'var(--green)', sub: 'run #61 · 7.2s'},
@@ -1357,7 +1373,7 @@ const personas = {
     lastPoll: 'just now',
     url: 'https://aws-tracker.corp.internal',
     stats: {
-      resources: {val: 134, color: 'var(--text)', sub: '10 resource types'},
+      resources: {val: 134, color: 'var(--text)', sub: '13 resource types'},
       alerts: {val: 17, color: 'var(--red)', sub: '3 critical · 14 others'},
       cost: {val: '$12.40', color: 'var(--red)', sub: 'this month'},
       poll: {val: 'PARTIAL', color: 'var(--amber)', sub: 'run #244 · 14.3s'},
@@ -1559,8 +1575,8 @@ window.addEventListener('scroll', () => {
 
 // ── INIT ──
 window.addEventListener('load', () => {
-  animateCount('count-resources', 10);
-  animateCount('count-alerts', 10);
+  animateCount('count-resources', 13);
+  animateCount('count-alerts', 13);
   animateCount('count-cost', 0.54);
   animateCount('count-deploy', 15);
   renderDashboard(currentPersona, currentSimTab);

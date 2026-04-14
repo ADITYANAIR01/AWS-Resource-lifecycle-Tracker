@@ -85,7 +85,8 @@ function stateClass(state) {
     stopped:'stopped', stopping:'stopping',
     unused:'unused', unassociated:'unassociated',
     error:'error', alarm:'ALARM', insufficient_data:'INSUFFICIENT_DATA',
-    inactive:'inactive',
+    inactive:'inactive', pending:'PENDING', failed:'FAILED',
+    deployed:'Deployed', inprogress:'InProgress',
   };
   return map[state.toLowerCase()] || state.toLowerCase();
 }
@@ -93,15 +94,29 @@ function stateClass(state) {
 function stateRowClass(state) {
   if (!state) return '';
   const s = state.toLowerCase();
-  if (['unused','unassociated','error','alarm'].includes(s)) return 'state-critical';
-  if (['stopped','stopping','insufficient_data'].includes(s)) return 'state-warning';
-  if (['running','available','active','associated','ok','in-use'].includes(s)) return 'state-success';
+  if (['unused','unassociated','error','alarm','failed'].includes(s)) return 'state-critical';
+  if (['stopped','stopping','insufficient_data','pending','inprogress'].includes(s)) return 'state-warning';
+  if (['running','available','active','associated','ok','in-use','deployed'].includes(s)) return 'state-success';
   return 'state-info';
 }
 
 function typeBadge(type) {
   if (!type) return '';
-  const labels = { ec2:'EC2', rds:'RDS', s3:'S3', ebs_volume:'EBS', ebs_snapshot:'SNAP', elastic_ip:'EIP', security_group:'SG', iam_user:'IAM', cloudwatch_alarm:'CW', rds_snapshot:'RSNAP' };
+  const labels = {
+    ec2:'EC2',
+    rds:'RDS',
+    s3:'S3',
+    ebs_volume:'EBS',
+    ebs_snapshot:'SNAP',
+    elastic_ip:'EIP',
+    security_group:'SG',
+    iam_user:'IAM',
+    cloudwatch_alarm:'CW',
+    rds_snapshot:'RSNAP',
+    ecs:'ECS',
+    eks:'EKS',
+    cloudfront:'CF',
+  };
   return `<span class="type-badge ${type}">${labels[type] || type.toUpperCase()}</span>`;
 }
 

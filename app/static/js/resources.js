@@ -29,7 +29,10 @@ function applyFilters() {
 
   filteredResources = allResources.filter(r => {
     if (type   && r.resource_type !== type)  return false;
-    if (state  && r.state !== state)          return false;
+    if (state) {
+      const resourceState = (r.state || '').toLowerCase();
+      if (resourceState !== state.toLowerCase()) return false;
+    }
     if (region && r.region !== region)        return false;
     if (search) {
       const hay = `${r.resource_name} ${r.resource_id} ${r.resource_type}`.toLowerCase();

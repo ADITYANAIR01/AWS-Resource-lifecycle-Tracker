@@ -104,6 +104,9 @@ EBS_MONTHLY_RATE_PER_GB = {
 
 EBS_SNAPSHOT_RATE_PER_GB = Decimal("0.05")
 ELASTIC_IP_HOURLY_RATE = Decimal("0.005")
+FARGATE_VCPU_HOURLY_RATE = Decimal("0.04676")
+FARGATE_GB_HOURLY_RATE = Decimal("0.00520")
+EKS_CLUSTER_HOURLY_RATE = Decimal("0.10")
 
 
 # ---------------------------------------------------------------------------
@@ -177,3 +180,50 @@ def estimate_elastic_ip_cost() -> Decimal:
     Actual duration tracked via last_modified in the DB.
     """
     return round(ELASTIC_IP_HOURLY_RATE, 4)
+
+
+def estimate_fargate_task_cost(
+    cpu_units: int,
+    memory_mib: int,
+    start_time: datetime,
+    task_count: int = 1,
+) -> Decimal:
+    """
+    Estimate ECS Fargate task cost.
+
+    Pricing model (ap-south-1):
+      - vCPU-hours:  $0.04676
+      - GB-hours:    $0.00520
+    """
+    if cpu_units <= 0 or memory_mib <= 0 or task_count <= 0:
+        return Decimal("0")
+
+    hours = _hours_since(start_time)
+    vcpu = Decimal(str(cpu_units)) / Decimal("1024")
+    memory_gb = Decimal(str(memory_mib)) / Decimal("1024")
+    per_task_hourly = (vcpu * FARGATE_VCPU_HOURLY_RATE) + (
+        memory_gb * FARGATE_GB_HOURLY_RATE
+    )
+
+    return round(per_task_hourly * hours * Decimal(str(task_count)), 4)
+
+
+def estimate_eks_cluster_cost(created_at: datetime) -> Decimal:
+    """Estimate EKS control plane cost ($0.10/hr) since cluster creation."""
+    return round(EKS_CLUSTER_HOURLY_RATE * _hours_since(created_at), 4)
+
+
+def estimate_eks_nodegroup_cost(
+    instance_type: str,
+    desired_size: int,
+    created_at: datetime,
+) -> Decimal:
+    """
+    Estimate EKS nodegroup EC2 cost.
+    Uses the EC2 on-demand rate table and desired node count.
+    """
+    if not instance_type or desired_size <= 0:
+        return Decimal("0")
+
+    per_node_cost = estimate_ec2_cost(instance_type, created_at)
+    return round(per_node_cost * Decimal(str(desired_size)), 4)

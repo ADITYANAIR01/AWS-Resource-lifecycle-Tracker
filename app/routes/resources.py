@@ -34,7 +34,7 @@ def list_resources():
                 SELECT COUNT(*) as total FROM resources
                 WHERE is_active = TRUE
                   AND (%s IS NULL OR resource_type = %s)
-                  AND (%s IS NULL OR state = %s)
+                                    AND (%s IS NULL OR LOWER(state) = LOWER(%s))
                   AND (%s IS NULL OR region = %s)
             """,
                 [
@@ -57,7 +57,7 @@ def list_resources():
                 FROM resources
                 WHERE is_active = TRUE
                   AND (%s IS NULL OR resource_type = %s)
-                  AND (%s IS NULL OR state = %s)
+                                    AND (%s IS NULL OR LOWER(state) = LOWER(%s))
                   AND (%s IS NULL OR region = %s)
                 ORDER BY first_seen DESC
                 LIMIT %s OFFSET %s
