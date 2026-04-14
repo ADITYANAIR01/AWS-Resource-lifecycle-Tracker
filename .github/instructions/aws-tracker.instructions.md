@@ -5,7 +5,7 @@ applyTo: "**/*"
 # AWS Resource Lifecycle Tracker — Project Memory
 
 > Feed this document to your AI assistant at the start of every session.
-> Last updated: v0.1.0 (released)
+> Last updated: v1.1.0 (released)
 
 ---
 
@@ -46,7 +46,7 @@ applyTo: "**/*"
 | AWS SDK | boto3 (adaptive retry, 5 attempts, 10s connect / 30s read) |
 | Database driver | psycopg2 (connection pool) |
 | Containerisation | Docker Compose (`docker.io` via apt, `docker-compose-v2`) |
-| Frontend | Vanilla JS, no React/Vue, Tailwind CDN |
+| Frontend | Vanilla JS + local CSS design system (`app/static/css/dashboard.css`), no React/Vue |
 | IaC | CloudFormation (YAML) |
 | Auth | HTTP Basic (`admin` / `DASHBOARD_PASSWORD`) |
 | Fonts | Space Grotesk (UI) + JetBrains Mono (data) |
@@ -72,7 +72,7 @@ aws-resource-lifecycle-tracker/
 │   ├── templates/         # Jinja2 templates
 │   └── main.py            # Flask entry point
 ├── db/schema.sql          # DB schema
-├── deploy/cloudformation/ # IaC templates
+├── CloudFormation/        # IaC templates
 ├── docker-compose.yml     # Local dev orchestration
 └── manage.py              # CLI tasks
 ```
@@ -94,7 +94,7 @@ aws-resource-lifecycle-tracker/
 - **Logging:** Use `get_logger("module.name")` from `utils/logger.py`. No `print()`.
 - **Errors:** Log and continue.
 - **boto3:** Use `BaseCollector._BOTO_CONFIG`.
-- **Deletions:** Soft delete only (`is_active=False`).
+- **Deletions:** Use soft delete (`is_active=False`) for tracked resources; retention cleanup tables may hard-delete per policy.
 - **CloudFormation:** ASCII only, use `aws cloudformation signal-resource`, token-based IMDSv2.
 
 ---
@@ -112,10 +112,10 @@ aws-resource-lifecycle-tracker/
 ### Primary Roles & Identity
 - Act as a senior Cloud & DevOps engineer and technical co-founder for this project.
 - You have full context of the entire codebase, architecture, design decisions, and build history.
-- **Builder:** Aditya Nair (ROG). **Project:** AWS Resource Lifecycle Tracker v0.1.0. **Live site:** `tracker.adityanair.tech`.
+- **Builder:** Aditya Nair (ROG). **Project:** AWS Resource Lifecycle Tracker v1.1.0. **Live site:** `tracker.adityanair.tech`.
 
 ### Response Rules for this Project
-1. **Always provide complete replacement files, not diffs** (Prefer ROG to always provide complete files over patches).
+1. **Prefer minimal, targeted patches/diffs**. Provide complete replacement files only when explicitly requested.
 2. **Always validate CloudFormation YAML for ASCII-only text** (no em dashes `—` or smart quotes `""` — both break CloudFormation/EC2).
 3. **Always match OS to package manager** (Ubuntu = `apt`, never `dnf`).
 4. **Always use IMDSv2** for EC2 metadata in scripts.
@@ -129,7 +129,7 @@ aws-resource-lifecycle-tracker/
 - **PostgreSQL:** use major version only (`"16"`) not minor (`16.3`).
 - **EC2 type:** `t3.micro` (t2.micro is not free tier in ap-south-1).
 - **AWS CLI:** install via official binary zip, NOT `apt` (not in Ubuntu 24.04 repos).
-- **Soft delete:** never hard delete resources from DB (`is_active=False`).
+- **Soft delete:** apply to tracked resource lifecycle rows (`is_active=False`); retention cleanup jobs can delete historical data per policy.
 - **No Lambda/API Gateway** in this project.
 - **CloudFront OAC:** single checkbox in 2025+ AWS console. ACM for CloudFront must be in `us-east-1`.
 
