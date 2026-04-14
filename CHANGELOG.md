@@ -2,6 +2,44 @@
 
 All notable changes to this project will be documented here.
 
+## [1.1.0] — 2026-04-14
+
+### Added
+
+- **Collectors:** Added ECS services collector (`poller/collectors/ecs.py`) with
+  support for cluster/service discovery, task definition metadata, launch type,
+  desired vs running counts, and tag enrichment.
+- **Collectors:** Added EKS clusters collector (`poller/collectors/eks.py`) with
+  nodegroup discovery, version/endpoint capture, and tag enrichment.
+- **Collectors:** Added CloudFront distributions collector
+  (`poller/collectors/cloudfront.py`) with global-region handling, status,
+  enabled flag, origin counts, and tags.
+- **Alert Rules:** Added `ecs_service_unhealthy`, `eks_cluster_pending`, and
+  `cloudfront_disabled` rules with environment-driven thresholds.
+- **Cost Estimation:** Added Fargate task pricing and EKS control-plane/
+  nodegroup estimators in `poller/utils/cost.py`.
+
+### Changed
+
+- **Poller Wiring:** Registered ECS, EKS, and CloudFront collectors in
+  `poller/main.py`.
+- **Dashboard/UI:** Added new resource type badges, labels, and filters across
+  resources/alerts/overview pages for ECS, EKS, and CloudFront.
+- **Config:** Added `.env` thresholds:
+  `ALERT_ECS_UNHEALTHY_MINS` and `ALERT_EKS_PENDING_MINS`.
+- **Docs:** Updated README tracking matrix and landing page coverage to include
+  ECS, EKS, and CloudFront.
+
+### Fixed
+
+- **Resource State Filtering:** Made resource state filtering case-insensitive in
+  API and frontend to correctly handle mixed-case states such as `ACTIVE`,
+  `PENDING`, `FAILED`, `Deployed`, and `InProgress`.
+- **ECS Cost Allocation:** Reduced cross-service EC2 host double-counting by
+  allocating ECS EC2 backing cost by running-task share per container instance.
+
+---
+
 ## [1.0.1] — 2026-04-07
 
 ### Fixed
