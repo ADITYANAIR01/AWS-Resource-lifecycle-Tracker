@@ -6,6 +6,7 @@ const TYPE_COLORS = {
   elastic_ip:'#fb923c', security_group:'#94a3b8',
   iam_user:'#fbbf24', cloudwatch_alarm:'#f87171', rds_snapshot:'#c084fc',
   ecs:'#8b5cf6', eks:'#6366f1', cloudfront:'#ec4899',
+  load_balancer:'#22d3ee', nat_gateway:'#f59e0b',
 };
 
 const TYPE_LABELS = {
@@ -14,6 +15,7 @@ const TYPE_LABELS = {
   elastic_ip:'Elastic IPs', security_group:'Security Groups',
   iam_user:'IAM Users', cloudwatch_alarm:'CloudWatch Alarms', rds_snapshot:'RDS Snapshots',
   ecs:'ECS Services', eks:'EKS Clusters', cloudfront:'CloudFront Distributions',
+  load_balancer:'Load Balancers', nat_gateway:'NAT Gateways',
 };
 
 async function loadOverview() {
@@ -64,7 +66,8 @@ async function loadOverview() {
     const label = TYPE_LABELS[t.resource_type] || t.resource_type;
     const pct = Math.round((t.count / maxCount) * 100);
     return `
-      <div class="resource-bar-row" onclick="window.location='/resources?type=${t.resource_type}'"
+      <div class="resource-bar-row" title="Filter Resources by ${esc(label)}"
+           onclick="window.location='/resources?type=${encodeURIComponent(t.resource_type)}'"
            style="animation:fadeInUp 0.3s ease forwards;animation-delay:${i*0.05}s">
         <span class="bar-label" style="color:${color}">${label}</span>
         <div class="bar-track">
@@ -78,6 +81,11 @@ async function loadOverview() {
   requestAnimationFrame(() => {
     document.querySelectorAll('.bar-fill').forEach(el => { el.style.width = el.dataset.pct + '%'; });
   });
+
+  const cardResources = document.getElementById('card-resources');
+  const cardAlerts = document.getElementById('card-alerts');
+  if (cardResources) cardResources.onclick = () => { window.location = '/resources'; };
+  if (cardAlerts) cardAlerts.onclick = () => { window.location = '/alerts'; };
 
   const alertData = await apiFetch('/api/alerts?status=active&page=1');
   if (!alertData) return;

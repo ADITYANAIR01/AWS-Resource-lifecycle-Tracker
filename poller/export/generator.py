@@ -382,7 +382,7 @@ def _overview_body() -> str:
   </div>
 </div>
 
-<div style="display:grid;grid-template-columns:1.4fr 1fr;gap:20px">
+<div class="overview-grid">
   <div class="card">
     <div class="card-accent-line"></div>
     <div class="section-header">Resources by Type</div>
@@ -421,6 +421,8 @@ def _resources_body() -> str:
     <option value="ec2">EC2</option>
     <option value="rds">RDS</option>
     <option value="s3">S3</option>
+    <option value="load_balancer">Load Balancer</option>
+    <option value="nat_gateway">NAT Gateway</option>
     <option value="ebs_volume">EBS Volume</option>
     <option value="ebs_snapshot">EBS Snapshot</option>
     <option value="elastic_ip">Elastic IP</option>
@@ -428,6 +430,9 @@ def _resources_body() -> str:
     <option value="iam_user">IAM User</option>
     <option value="cloudwatch_alarm">CloudWatch Alarm</option>
     <option value="rds_snapshot">RDS Snapshot</option>
+    <option value="ecs">ECS</option>
+    <option value="eks">EKS</option>
+    <option value="cloudfront">CloudFront</option>
   </select>
   <select class="filter-select" id="filter-state" onchange="applyFilters()">
     <option value="">All States</option>
@@ -436,8 +441,16 @@ def _resources_body() -> str:
     <option value="available">Available</option>
     <option value="in-use">In Use</option>
     <option value="unused">Unused</option>
+    <option value="associated">Associated</option>
+    <option value="unassociated">Unassociated</option>
     <option value="active">Active</option>
     <option value="inactive">Inactive</option>
+    <option value="pending">Pending</option>
+    <option value="provisioning">Provisioning</option>
+    <option value="deleting">Deleting</option>
+    <option value="failed">Failed</option>
+    <option value="deployed">Deployed</option>
+    <option value="inprogress">In Progress</option>
   </select>
   <select class="filter-select" id="filter-region" onchange="applyFilters()">
     <option value="">All Regions</option>
@@ -476,7 +489,39 @@ def _resources_body() -> str:
     <span id="resources-count">Loading...</span>
     <div class="pagination" id="pagination"></div>
   </div>
-</div>"""
+</div>
+
+<div class="panel-backdrop" id="resource-panel-backdrop" onclick="closeResourcePanel()"></div>
+<aside class="detail-panel" id="resource-detail-panel" aria-hidden="true">
+  <div class="detail-panel-header">
+    <div>
+      <div class="detail-panel-title" id="resource-panel-title">Resource Details</div>
+      <div class="detail-panel-subtitle" id="resource-panel-meta">Loading...</div>
+    </div>
+    <button class="detail-panel-close" type="button" onclick="closeResourcePanel()" aria-label="Close panel">×</button>
+  </div>
+
+  <div class="detail-panel-section" id="resource-panel-highlights"></div>
+
+  <div class="detail-panel-section">
+    <div class="section-header">Tags</div>
+    <div id="resource-panel-tags"></div>
+  </div>
+
+  <div class="detail-panel-section">
+    <div class="section-header">Recent Alerts</div>
+    <div id="resource-panel-alerts"></div>
+  </div>
+
+  <div class="detail-panel-section">
+    <div class="section-header">Lifecycle Timeline</div>
+    <div class="timeline" id="resource-panel-timeline"></div>
+  </div>
+
+  <div class="detail-panel-footer">
+    <a class="btn btn-ghost" id="resource-panel-full-link" href="#">Open Full Detail Page</a>
+  </div>
+</aside>"""
 
 
 def _alerts_body() -> str:
@@ -502,11 +547,19 @@ def _alerts_body() -> str:
   </select>
   <select class="filter-select" id="filter-type" onchange="loadAlerts()">
     <option value="">All Types</option>
-    <option value="security_group_unused">Security Group Unused</option>
-    <option value="elastic_ip_unassociated">Elastic IP Unassociated</option>
     <option value="ec2_long_running">EC2 Long Running</option>
+    <option value="ec2_stopped_too_long">EC2 Stopped Too Long</option>
     <option value="ebs_unattached">EBS Unattached</option>
+    <option value="elastic_ip_unassociated">Elastic IP Unassociated</option>
+    <option value="security_group_unused">Security Group Unused</option>
+    <option value="rds_stopped_too_long">RDS Stopped Too Long</option>
     <option value="iam_user_inactive">IAM User Inactive</option>
+    <option value="cloudwatch_alarm_stale">CloudWatch Alarm Stale</option>
+    <option value="ecs_service_unhealthy">ECS Service Unhealthy</option>
+    <option value="eks_cluster_pending">EKS Cluster Pending</option>
+    <option value="cloudfront_disabled">CloudFront Disabled</option>
+    <option value="nat_gateway_active_too_long">NAT Gateway Active Too Long</option>
+    <option value="load_balancer_active_too_long">Load Balancer Active Too Long</option>
   </select>
 </div>
 
@@ -565,8 +618,42 @@ def _poller_body() -> str:
   </table>
   <div class="table-footer">
     <span id="poller-count">Loading...</span>
+    <span style="font-size:0.72rem;color:var(--text-dim)">Click a run to inspect resource changes</span>
   </div>
-</div>"""
+</div>
+
+<div class="panel-backdrop" id="run-panel-backdrop" onclick="closeRunPanel()"></div>
+<aside class="detail-panel" id="run-detail-panel" aria-hidden="true">
+  <div class="detail-panel-header">
+    <div>
+      <div class="detail-panel-title" id="run-panel-title">Run Resource Map</div>
+      <div class="detail-panel-subtitle" id="run-panel-meta">Loading...</div>
+    </div>
+    <button class="detail-panel-close" type="button" onclick="closeRunPanel()" aria-label="Close panel">×</button>
+  </div>
+
+  <div class="detail-panel-section" id="run-panel-summary"></div>
+
+  <div class="detail-panel-section">
+    <div class="section-header">Created</div>
+    <div id="run-panel-created"></div>
+  </div>
+
+  <div class="detail-panel-section">
+    <div class="section-header">Updated</div>
+    <div id="run-panel-updated"></div>
+  </div>
+
+  <div class="detail-panel-section">
+    <div class="section-header">Deleted</div>
+    <div id="run-panel-deleted"></div>
+  </div>
+
+  <div class="detail-panel-section">
+    <div class="section-header">Existing In Run</div>
+    <div id="run-panel-existing"></div>
+  </div>
+</aside>"""
 
 
 # ---------------------------------------------------------------------------
@@ -582,8 +669,25 @@ _SNAPSHOT_UTILS_EXTRA = """
   function getSnapshotData(url) {
     var d = window.__SNAPSHOT_DATA__;
     if (!d) return null;
+    var decoded = decodeURIComponent(url || '');
     if (url.includes('/api/overview'))   return d.overview   || null;
+    if (/\\/api\\/resources\\/[^/]+\\/.+/.test(decoded)) {
+      var parts = decoded.match(/\\/api\\/resources\\/([^/]+)\\/(.+)$/);
+      if (!parts) return null;
+      var resourceType = parts[1];
+      var resourceId = parts[2];
+      var resources = (d.resources && d.resources.resources) || [];
+      var resource = resources.find(function(item) {
+        return item.resource_type === resourceType && item.resource_id === resourceId;
+      });
+      if (!resource) return null;
+      var alerts = ((d.alerts && d.alerts.alerts) || []).filter(function(alert) {
+        return alert.resource_type === resourceType && alert.resource_id === resourceId;
+      });
+      return { resource: resource, snapshots: [], alerts: alerts };
+    }
     if (url.includes('/api/resources'))  return d.resources  || null;
+    if (/\\/api\\/poller\\/\\d+\\/resource-map/.test(url)) return null;
     if (url.includes('/api/alerts'))     return d.alerts     || null;
     if (url.includes('/api/poller'))     return d.poller     || null;
     return null;

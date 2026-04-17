@@ -14,6 +14,8 @@
     <option value="ec2">EC2</option>
     <option value="rds">RDS</option>
     <option value="s3">S3</option>
+    <option value="load_balancer">Load Balancer</option>
+    <option value="nat_gateway">NAT Gateway</option>
     <option value="ebs_volume">EBS Volume</option>
     <option value="ebs_snapshot">EBS Snapshot</option>
     <option value="elastic_ip">Elastic IP</option>
@@ -37,6 +39,8 @@
     <option value="active">Active</option>
     <option value="inactive">Inactive</option>
     <option value="pending">Pending</option>
+    <option value="provisioning">Provisioning</option>
+    <option value="deleting">Deleting</option>
     <option value="failed">Failed</option>
     <option value="deployed">Deployed</option>
     <option value="inprogress">In Progress</option>
@@ -81,5 +85,37 @@
     <div class="pagination" id="pagination"></div>
   </div>
 </div>
+
+<div class="panel-backdrop" id="resource-panel-backdrop" onclick="closeResourcePanel()"></div>
+<aside class="detail-panel" id="resource-detail-panel" aria-hidden="true">
+  <div class="detail-panel-header">
+    <div>
+      <div class="detail-panel-title" id="resource-panel-title">Resource Details</div>
+      <div class="detail-panel-subtitle" id="resource-panel-meta">Loading...</div>
+    </div>
+    <button class="detail-panel-close" type="button" onclick="closeResourcePanel()" aria-label="Close panel">×</button>
+  </div>
+
+  <div class="detail-panel-section" id="resource-panel-highlights"></div>
+
+  <div class="detail-panel-section">
+    <div class="section-header">Tags</div>
+    <div id="resource-panel-tags"></div>
+  </div>
+
+  <div class="detail-panel-section">
+    <div class="section-header">Recent Alerts</div>
+    <div id="resource-panel-alerts"></div>
+  </div>
+
+  <div class="detail-panel-section">
+    <div class="section-header">Lifecycle Timeline</div>
+    <div class="timeline" id="resource-panel-timeline"></div>
+  </div>
+
+  <div class="detail-panel-footer">
+    <a class="btn btn-ghost" id="resource-panel-full-link" href="#">Open Full Detail Page</a>
+  </div>
+</aside>
 {% endblock %}
 {% block scripts %}<script src="/static/js/resources.js"></script>{% endblock %}

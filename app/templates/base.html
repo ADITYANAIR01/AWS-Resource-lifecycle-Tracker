@@ -15,8 +15,11 @@
   </div>
   {% endif %}
 
+  <button class="mobile-nav-toggle" id="mobile-nav-toggle" type="button" aria-label="Toggle navigation">☰</button>
+  <div class="sidebar-backdrop" id="sidebar-backdrop"></div>
+
   <div class="app-layout">
-    <aside class="sidebar">
+    <aside class="sidebar" id="sidebar">
       <div class="sidebar-logo">
         <div class="logo-icon">⬡</div>
         <div class="logo-text">
@@ -59,7 +62,7 @@
       </div>
     </aside>
 
-    <main class="main-content">
+    <main class="main-content" id="main-content">
       {% block content %}{% endblock %}
     </main>
   </div>

@@ -39,7 +39,41 @@
   </table>
   <div class="table-footer">
     <span id="poller-count">Loading...</span>
+    <span style="font-size:0.72rem;color:var(--text-dim)">Click a run to inspect resource changes</span>
   </div>
 </div>
+
+<div class="panel-backdrop" id="run-panel-backdrop" onclick="closeRunPanel()"></div>
+<aside class="detail-panel" id="run-detail-panel" aria-hidden="true">
+  <div class="detail-panel-header">
+    <div>
+      <div class="detail-panel-title" id="run-panel-title">Run Resource Map</div>
+      <div class="detail-panel-subtitle" id="run-panel-meta">Loading...</div>
+    </div>
+    <button class="detail-panel-close" type="button" onclick="closeRunPanel()" aria-label="Close panel">×</button>
+  </div>
+
+  <div class="detail-panel-section" id="run-panel-summary"></div>
+
+  <div class="detail-panel-section">
+    <div class="section-header">Created</div>
+    <div id="run-panel-created"></div>
+  </div>
+
+  <div class="detail-panel-section">
+    <div class="section-header">Updated</div>
+    <div id="run-panel-updated"></div>
+  </div>
+
+  <div class="detail-panel-section">
+    <div class="section-header">Deleted</div>
+    <div id="run-panel-deleted"></div>
+  </div>
+
+  <div class="detail-panel-section">
+    <div class="section-header">Existing In Run</div>
+    <div id="run-panel-existing"></div>
+  </div>
+</aside>
 {% endblock %}
 {% block scripts %}<script src="/static/js/poller.js"></script>{% endblock %}

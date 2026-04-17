@@ -107,6 +107,10 @@ ELASTIC_IP_HOURLY_RATE = Decimal("0.005")
 FARGATE_VCPU_HOURLY_RATE = Decimal("0.04676")
 FARGATE_GB_HOURLY_RATE = Decimal("0.00520")
 EKS_CLUSTER_HOURLY_RATE = Decimal("0.10")
+ALB_HOURLY_RATE = Decimal("0.0270")
+NLB_HOURLY_RATE = Decimal("0.0250")
+GLB_HOURLY_RATE = Decimal("0.0125")
+NAT_GATEWAY_HOURLY_RATE = Decimal("0.0500")
 
 
 # ---------------------------------------------------------------------------
@@ -180,6 +184,35 @@ def estimate_elastic_ip_cost() -> Decimal:
     Actual duration tracked via last_modified in the DB.
     """
     return round(ELASTIC_IP_HOURLY_RATE, 4)
+
+
+def estimate_load_balancer_cost(lb_type: str, created_at: datetime) -> Decimal:
+        """
+        Estimate ELB base hourly cost by load balancer type.
+
+        Notes:
+            - Uses rough on-demand hourly rates and excludes LCU/NLCU/GLCU charges.
+            - Intended for directional visibility, not exact billing parity.
+        """
+        lb_key = (lb_type or "application").lower()
+        rates = {
+                "application": ALB_HOURLY_RATE,
+                "network": NLB_HOURLY_RATE,
+                "gateway": GLB_HOURLY_RATE,
+        }
+        rate = rates.get(lb_key, ALB_HOURLY_RATE)
+        return round(rate * _hours_since(created_at), 4)
+
+
+def estimate_nat_gateway_cost(created_at: datetime) -> Decimal:
+        """
+        Estimate NAT Gateway base hourly cost.
+
+        Notes:
+            - Excludes data processing ($/GB) charges.
+            - Shows baseline runtime cost from create time.
+        """
+        return round(NAT_GATEWAY_HOURLY_RATE * _hours_since(created_at), 4)
 
 
 def estimate_fargate_task_cost(

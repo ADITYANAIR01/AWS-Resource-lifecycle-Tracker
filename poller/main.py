@@ -17,6 +17,8 @@ from collectors.rds_instances import RDSInstanceCollector
 from collectors.rds_snapshots import RDSSnapshotCollector
 from collectors.s3 import S3Collector
 from collectors.elastic_ips import ElasticIPCollector
+from collectors.load_balancers import LoadBalancerCollector
+from collectors.nat_gateways import NatGatewayCollector
 from collectors.security_groups import SecurityGroupCollector
 from collectors.iam_users import IAMUserCollector
 from collectors.cloudwatch_alarms import CloudWatchAlarmCollector
@@ -72,6 +74,8 @@ def _get_collectors(session, account_id: str, region: str) -> list:
         RDSInstanceCollector(session, account_id, region),
         RDSSnapshotCollector(session, account_id, region),
         S3Collector(session, account_id, region),
+        LoadBalancerCollector(session, account_id, region),
+        NatGatewayCollector(session, account_id, region),
         ElasticIPCollector(session, account_id, region),
         SecurityGroupCollector(session, account_id, region),
         IAMUserCollector(session, account_id, region),

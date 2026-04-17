@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented here.
 
+## [2.0.0] — 2026-04-18
+
+### Added
+
+- **Collectors:** Added Load Balancers collector (ALB, NLB, GLB) and NAT Gateways collector.
+- **Alert Rules:** Added `load_balancer_active_too_long` and `nat_gateway_active_too_long` rules for identifying idle components accumulating hourly charges.
+- **UI/UX:** Added interactive Overview metrics bars that directly link to pre-filtered resources.
+- **UI/UX:** Replaced page navigation with a slide-out Details Panel for viewing resource history and snapshot data instantly.
+- **UI/UX:** Added Poller Run Resource Map panel (creates, updates, deletes map) to visualize state diffs across polling intervals.
+- **UI/UX:** Fully responsive design overhaul for mobile viewing and flexible grids.
+
+### Changed
+
+- **Config:** Added `ALERT_LOAD_BALANCER_DAYS` and `ALERT_NAT_GATEWAY_DAYS` threshold configurations heavily integrated into CloudFormation scripts.
+- **Static Export:** Refactored static snapshot `generator.py` to seamlessly embed the new interactive panels without requiring external REST calls.
+- **Docs:** Updated `README.md` and landing pages with latest resource tracking stats and coverage.
+
 ## [1.1.0] — 2026-04-14
 
 ### Added

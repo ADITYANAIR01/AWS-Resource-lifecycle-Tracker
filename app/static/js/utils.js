@@ -83,6 +83,7 @@ function stateClass(state) {
     running:'running', available:'available', active:'active',
     associated:'associated', ok:'OK', 'in-use':'in-use',
     stopped:'stopped', stopping:'stopping',
+    provisioning:'PENDING', deleting:'stopping',
     unused:'unused', unassociated:'unassociated',
     error:'error', alarm:'ALARM', insufficient_data:'INSUFFICIENT_DATA',
     inactive:'inactive', pending:'PENDING', failed:'FAILED',
@@ -95,7 +96,7 @@ function stateRowClass(state) {
   if (!state) return '';
   const s = state.toLowerCase();
   if (['unused','unassociated','error','alarm','failed'].includes(s)) return 'state-critical';
-  if (['stopped','stopping','insufficient_data','pending','inprogress'].includes(s)) return 'state-warning';
+  if (['stopped','stopping','insufficient_data','pending','provisioning','deleting','inprogress'].includes(s)) return 'state-warning';
   if (['running','available','active','associated','ok','in-use','deployed'].includes(s)) return 'state-success';
   return 'state-info';
 }
@@ -116,8 +117,31 @@ function typeBadge(type) {
     ecs:'ECS',
     eks:'EKS',
     cloudfront:'CF',
+    load_balancer:'ELB',
+    nat_gateway:'NAT',
   };
   return `<span class="type-badge ${type}">${labels[type] || type.toUpperCase()}</span>`;
+}
+
+function formatTypeLabel(type) {
+  const labels = {
+    ec2: 'EC2',
+    rds: 'RDS',
+    s3: 'S3',
+    ebs_volume: 'EBS Volume',
+    ebs_snapshot: 'EBS Snapshot',
+    elastic_ip: 'Elastic IP',
+    security_group: 'Security Group',
+    iam_user: 'IAM User',
+    cloudwatch_alarm: 'CloudWatch Alarm',
+    rds_snapshot: 'RDS Snapshot',
+    ecs: 'ECS Service',
+    eks: 'EKS Cluster',
+    cloudfront: 'CloudFront',
+    load_balancer: 'Load Balancer',
+    nat_gateway: 'NAT Gateway',
+  };
+  return labels[type] || String(type || 'unknown').replace(/_/g, ' ');
 }
 
 function renderTags(tags) {
@@ -189,4 +213,33 @@ function debounce(fn, delay = 200) {
   return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), delay); };
 }
 
-document.addEventListener('DOMContentLoaded', () => { loadSidebarData(); });
+function setupResponsiveSidebar() {
+  const toggle = document.getElementById('mobile-nav-toggle');
+  const backdrop = document.getElementById('sidebar-backdrop');
+  const nav = document.getElementById('sidebar');
+  if (!toggle || !backdrop || !nav) return;
+
+  const closeSidebar = () => document.body.classList.remove('sidebar-open');
+  const openSidebar = () => document.body.classList.add('sidebar-open');
+
+  toggle.addEventListener('click', () => {
+    if (document.body.classList.contains('sidebar-open')) closeSidebar();
+    else openSidebar();
+  });
+  backdrop.addEventListener('click', closeSidebar);
+
+  nav.querySelectorAll('a.nav-item').forEach((item) => {
+    item.addEventListener('click', () => {
+      if (window.innerWidth <= 760) closeSidebar();
+    });
+  });
+
+  window.addEventListener('resize', () => {
+    if (window.innerWidth > 760) closeSidebar();
+  });
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  setupResponsiveSidebar();
+  loadSidebarData();
+});

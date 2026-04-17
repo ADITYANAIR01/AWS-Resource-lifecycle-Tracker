@@ -31,6 +31,8 @@ Metadata:
           - AlertEBSUnattachedDays
           - AlertRDSStoppedDays
           - AlertIAMInactiveDays
+          - AlertLoadBalancerDays
+          - AlertNatGatewayDays
       - Label:
           default: "4. Cleanup Behaviour"
         Parameters:
@@ -64,6 +66,10 @@ Metadata:
           default: "RDS Stopped Alert (days)"
       AlertIAMInactiveDays:
           default: "IAM Inactive Alert (days)"
+      AlertLoadBalancerDays:
+          default: "Load Balancer Active Alert (days)"
+      AlertNatGatewayDays:
+          default: "NAT Gateway Active Alert (days)"
       RetainDataOnDelete:
           default: "Retain Data on Stack Delete"
       ExistingIAMRoleName:
@@ -152,6 +158,18 @@ Parameters:
     MinValue: 1
     MaxValue: 7
     Description: "Max 7 - AWS auto-restarts RDS after 7 days."
+
+  AlertLoadBalancerDays:
+    Type: Number
+    Default: 30
+    MinValue: 1
+    MaxValue: 365
+
+  AlertNatGatewayDays:
+    Type: Number
+    Default: 30
+    MinValue: 1
+    MaxValue: 365
 
   AlertIAMInactiveDays:
     Type: Number
@@ -366,7 +384,14 @@ Resources:
                   - ec2:DescribeSnapshots
                   - ec2:DescribeAddresses
                   - ec2:DescribeSecurityGroups
+                  - ec2:DescribeNatGateways
                   - ec2:DescribeNetworkInterfaces
+                Resource: "*"
+              - Sid: ELBReadOnly
+                Effect: Allow
+                Action:
+                  - elasticloadbalancing:DescribeLoadBalancers
+                  - elasticloadbalancing:DescribeTags
                 Resource: "*"
               - Sid: RDSReadOnly
                 Effect: Allow
@@ -797,8 +822,8 @@ Resources:
             ALERT_EC2_STOPPED_DAYS=${AlertEC2StoppedDays}
             ALERT_EBS_UNATTACHED_DAYS=${AlertEBSUnattachedDays}
             ALERT_RDS_STOPPED_DAYS=${AlertRDSStoppedDays}
-            ALERT_IAM_INACTIVE_DAYS=${AlertIAMInactiveDays}
-            REQUIRED_TAGS=Owner,Project,Environment
+            ALERT_IAM_INACTIVE_DAYS=${AlertIAMInactiveDays}              ALERT_LOAD_BALANCER_DAYS=${AlertLoadBalancerDays}
+              ALERT_NAT_GATEWAY_DAYS=${AlertNatGatewayDays}            REQUIRED_TAGS=Owner,Project,Environment
             ENVEOF
             echo ".env written"
 

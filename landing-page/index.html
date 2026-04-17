@@ -617,7 +617,7 @@ footer{
       <span class="accent">Before it costs you.</span>
     </h1>
     <p class="hero-sub">
-      Track all 13 AWS resource types, get intelligent alerts, generate static snapshots — and deploy for under $1/month.
+      Track all 15 AWS resource types, get intelligent alerts, generate static snapshots — and deploy for under $1/month.
     </p>
     <div class="hero-actions">
       <a href="#deploy" class="btn btn-primary">
@@ -735,7 +735,7 @@ footer{
     <div class="demo-header reveal">
       <div class="section-tag">Coverage</div>
       <h2>What gets tracked</h2>
-      <p>13 AWS resource types supported today. Click <strong style="color:var(--accent)">View Info</strong> to see what data is collected for each.</p>
+      <p>15 AWS resource types supported today. Click <strong style="color:var(--accent)">View Info</strong> to see what data is collected for each.</p>
     </div>
 
     <div class="services-grid reveal" id="services-grid">
@@ -1002,9 +1002,9 @@ footer{
           <div style="font-size:.65rem;text-transform:uppercase;letter-spacing:.1em;color:var(--text3);margin:16px 0 12px">IAM Policy</div>
           <div class="code-block" style="font-size:.7rem">
 <span class="c"># Read-only. Cannot modify anything.</span>
-ec2:Describe* rds:Describe*
+ec2:Describe* ec2:DescribeNatGateways rds:Describe*
 s3:List* iam:List* iam:Get*
-cloudwatch:Describe*
+cloudwatch:Describe* elasticloadbalancing:Describe*
 sns:Publish (alerts topic only)
 secretsmanager:GetSecretValue
 s3:PutObject (snapshots bucket)
@@ -1343,7 +1343,7 @@ const personas = {
     lastPoll: '1min ago',
     url: 'https://tracker.startup.io',
     stats: {
-      resources: {val: 47, color: 'var(--text)', sub: '13 resource types'},
+      resources: {val: 47, color: 'var(--text)', sub: '15 resource types'},
       alerts: {val: 8, color: 'var(--red)', sub: '2 critical · 6 warning'},
       cost: {val: '$3.40', color: 'var(--amber)', sub: 'this month'},
       poll: {val: 'SUCCESS', color: 'var(--green)', sub: 'run #61 · 7.2s'},
@@ -1373,7 +1373,7 @@ const personas = {
     lastPoll: 'just now',
     url: 'https://aws-tracker.corp.internal',
     stats: {
-      resources: {val: 134, color: 'var(--text)', sub: '13 resource types'},
+      resources: {val: 134, color: 'var(--text)', sub: '15 resource types'},
       alerts: {val: 17, color: 'var(--red)', sub: '3 critical · 14 others'},
       cost: {val: '$12.40', color: 'var(--red)', sub: 'this month'},
       poll: {val: 'PARTIAL', color: 'var(--amber)', sub: 'run #244 · 14.3s'},
@@ -1575,7 +1575,7 @@ window.addEventListener('scroll', () => {
 
 // ── INIT ──
 window.addEventListener('load', () => {
-  animateCount('count-resources', 13);
+  animateCount('count-resources', 15);
   animateCount('count-alerts', 13);
   animateCount('count-cost', 0.54);
   animateCount('count-deploy', 15);

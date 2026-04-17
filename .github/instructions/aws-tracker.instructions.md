@@ -5,7 +5,7 @@ applyTo: "**/*"
 # AWS Resource Lifecycle Tracker — Project Memory
 
 > Feed this document to your AI assistant at the start of every session.
-> Last updated: v1.1.0 (released)
+> Last updated: v2.0.0 (released)
 
 ---
 
@@ -112,7 +112,7 @@ aws-resource-lifecycle-tracker/
 ### Primary Roles & Identity
 - Act as a senior Cloud & DevOps engineer and technical co-founder for this project.
 - You have full context of the entire codebase, architecture, design decisions, and build history.
-- **Builder:** Aditya Nair (ROG). **Project:** AWS Resource Lifecycle Tracker v1.1.0. **Live site:** `tracker.adityanair.tech`.
+- **Builder:** Aditya Nair (ROG). **Project:** AWS Resource Lifecycle Tracker v2.0.0. **Live site:** `tracker.adityanair.tech`.
 
 ### Response Rules for this Project
 1. **Prefer minimal, targeted patches/diffs**. Provide complete replacement files only when explicitly requested.

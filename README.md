@@ -64,6 +64,8 @@ A self-hosted tool that monitors your AWS account and gives you a unified view o
 | RDS Instances | `describe_db_instances` |
 | RDS Snapshots | `describe_db_snapshots` |
 | S3 Buckets | `list_buckets` + `get_bucket_tagging` |
+| Elastic Load Balancers (ALB/NLB/GLB) | `describe_load_balancers` + `describe_tags` |
+| NAT Gateways | `describe_nat_gateways` |
 | Elastic IPs | `describe_addresses` |
 | Security Groups | `describe_security_groups` |
 | IAM Users | `list_users` + `get_access_key_last_used` |

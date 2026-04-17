@@ -300,6 +300,44 @@ ALERT_RULES = [
             f"Confirm this is intentional to avoid stale CDN endpoints."
         ),
     },
+    {
+        "type": "nat_gateway_active_too_long",
+        "severity": "warning",
+        "query": """
+            SELECT resource_id, resource_type, resource_name,
+                   account_id, region
+            FROM resources
+            WHERE resource_type = 'nat_gateway'
+              AND state         = 'available'
+              AND is_active     = TRUE
+              AND created_at    < NOW() - INTERVAL '%s days'
+        """,
+        "get_params": lambda: (_days("ALERT_NAT_GATEWAY_DAYS", 30),),
+        "message_fn": lambda row: (
+            f"NAT Gateway {row['resource_name'] or row['resource_id']} has been available for more than "
+            f"{_days('ALERT_NAT_GATEWAY_DAYS', 30)} days. "
+            f"NAT Gateways incur high hourly charges even when idle."
+        ),
+    },
+    {
+        "type": "load_balancer_active_too_long",
+        "severity": "warning",
+        "query": """
+            SELECT resource_id, resource_type, resource_name,
+                   account_id, region
+            FROM resources
+            WHERE resource_type = 'load_balancer'
+              AND state         = 'active'
+              AND is_active     = TRUE
+              AND created_at    < NOW() - INTERVAL '%s days'
+        """,
+        "get_params": lambda: (_days("ALERT_LOAD_BALANCER_DAYS", 30),),
+        "message_fn": lambda row: (
+            f"Load Balancer {row['resource_name'] or row['resource_id']} has been active for more than "
+            f"{_days('ALERT_LOAD_BALANCER_DAYS', 30)} days. "
+            f"Verify if it is still routing traffic."
+        ),
+    },
     # -------------------------------------------------------------------------
     # Tag-based — checked per required tag key
     # These are built dynamically in the evaluator since the required tag

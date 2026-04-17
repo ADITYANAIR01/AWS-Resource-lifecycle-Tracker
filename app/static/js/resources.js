@@ -6,9 +6,18 @@ let currentPage = 1;
 const PAGE_SIZE = 50;
 let sortKey = 'created_at';
 let sortDir = -1;
+let activePanelKey = null;
 
 function getUrlParam(key) {
   return new URLSearchParams(window.location.search).get(key) || '';
+}
+
+function resourceKey(resourceType, resourceId) {
+  return `${resourceType}::${resourceId}`;
+}
+
+function findResource(resourceType, resourceId) {
+  return allResources.find((r) => r.resource_type === resourceType && r.resource_id === resourceId) || null;
 }
 
 async function loadResources() {
@@ -75,14 +84,17 @@ function renderTable() {
     tbody.innerHTML = page.map((r, i) => {
       const tagsHtml = r.tags && Object.keys(r.tags).length > 0
         ? Object.entries(r.tags).slice(0,2).map(([k,v]) =>
-            `<span class="tag-pill"><span class="tag-key">${esc(k)}</span><span style="color:var(--text-dim)">:</span><span class="tag-val">${esc(trunc(v,16))}</span></span>`
+            `<span class="tag-pill" title="${esc(`${k}:${v}`)}"><span class="tag-key">${esc(k)}</span><span style="color:var(--text-dim)">:</span><span class="tag-val">${esc(trunc(v,16))}</span></span>`
           ).join(' ')
         : '<span style="color:var(--text-dim);font-size:0.7rem">—</span>';
 
       return `
         <tr class="${stateRowClass(r.state)}"
             style="animation:fadeInUp 0.2s ease forwards;animation-delay:${Math.min(i*0.02,0.3)}s"
-            onclick="window.location='/resources/${esc(r.resource_type)}/${esc(r.resource_id)}'">
+            data-resource-type="${esc(r.resource_type)}"
+            data-resource-id="${esc(r.resource_id)}"
+            tabindex="0"
+            aria-label="View details for ${esc(r.resource_name || r.resource_id)}">
           <td>${typeBadge(r.resource_type)}</td>
           <td>
             <div style="font-weight:500;color:var(--text-primary)">${esc(trunc(r.resource_name||r.resource_id,32))}</div>
@@ -93,9 +105,10 @@ function renderTable() {
           <td><span title="${esc(r.created_at||'')}" style="color:var(--text-secondary)">${ageFromISO(r.created_at)}</span></td>
           <td><span class="${costClass(r.estimated_cost_usd)}">${formatCost(r.estimated_cost_usd)}</span></td>
           <td><div style="display:flex;gap:4px;flex-wrap:wrap">${tagsHtml}</div></td>
-          <td><span style="color:var(--text-dim);font-size:0.8rem">→</span></td>
+          <td><button type="button" class="text-link-btn">View</button></td>
         </tr>`;
     }).join('');
+    bindRowInteractions();
   }
 
   const total = filteredResources.length;
@@ -118,5 +131,197 @@ function goPage(p) {
   renderTable();
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
+
+function bindRowInteractions() {
+  const rows = document.querySelectorAll('#resources-tbody tr[data-resource-type]');
+  rows.forEach((row) => {
+    const open = () => openResourcePanel(row.dataset.resourceType, row.dataset.resourceId);
+    row.addEventListener('click', open);
+    row.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        open();
+      }
+    });
+
+    row.querySelectorAll('.text-link-btn').forEach((btn) => {
+      btn.addEventListener('click', (event) => {
+        event.stopPropagation();
+        open();
+      });
+    });
+  });
+}
+
+async function fetchResourceDetail(resourceType, resourceId) {
+  const data = await apiFetch(
+    `/api/resources/${encodeURIComponent(resourceType)}/${encodeURIComponent(resourceId)}`
+  );
+  if (data && data.resource) return data;
+
+  const fallbackResource = findResource(resourceType, resourceId);
+  if (!fallbackResource) return null;
+
+  const snapshotAlerts = window.__SNAPSHOT_DATA__?.alerts?.alerts || [];
+  const relatedAlerts = snapshotAlerts
+    .filter((a) => a.resource_type === resourceType && a.resource_id === resourceId)
+    .slice(0, 10);
+
+  return {
+    resource: fallbackResource,
+    snapshots: [],
+    alerts: relatedAlerts,
+  };
+}
+
+function openResourcePanelShell() {
+  const panel = document.getElementById('resource-detail-panel');
+  const backdrop = document.getElementById('resource-panel-backdrop');
+  panel?.classList.add('open');
+  backdrop?.classList.add('open');
+  panel?.setAttribute('aria-hidden', 'false');
+  document.body.classList.add('panel-open');
+}
+
+function closeResourcePanel() {
+  const panel = document.getElementById('resource-detail-panel');
+  const backdrop = document.getElementById('resource-panel-backdrop');
+  panel?.classList.remove('open');
+  backdrop?.classList.remove('open');
+  panel?.setAttribute('aria-hidden', 'true');
+  document.body.classList.remove('panel-open');
+  activePanelKey = null;
+}
+
+async function openResourcePanel(resourceType, resourceId) {
+  activePanelKey = resourceKey(resourceType, resourceId);
+  openResourcePanelShell();
+
+  const titleEl = document.getElementById('resource-panel-title');
+  const metaEl = document.getElementById('resource-panel-meta');
+  const highlightsEl = document.getElementById('resource-panel-highlights');
+  const tagsEl = document.getElementById('resource-panel-tags');
+  const alertsEl = document.getElementById('resource-panel-alerts');
+  const timelineEl = document.getElementById('resource-panel-timeline');
+  const fullLinkEl = document.getElementById('resource-panel-full-link');
+
+  titleEl.textContent = 'Loading Resource...';
+  metaEl.textContent = `${formatTypeLabel(resourceType)} · ${trunc(resourceId, 42)}`;
+  highlightsEl.innerHTML = '<div class="skeleton skeleton-text" style="height:70px;width:100%"></div>';
+  tagsEl.innerHTML = '<div class="skeleton skeleton-text" style="height:22px;width:85%"></div>';
+  alertsEl.innerHTML = '<div class="skeleton skeleton-text" style="height:22px;width:100%"></div>';
+  timelineEl.innerHTML = '<div class="skeleton skeleton-text" style="height:16px;width:100%"></div>';
+  if (fullLinkEl) {
+    fullLinkEl.href = `/resources/${encodeURIComponent(resourceType)}/${encodeURIComponent(resourceId)}`;
+  }
+
+  const data = await fetchResourceDetail(resourceType, resourceId);
+  if (!data) {
+    titleEl.textContent = 'Resource not found';
+    metaEl.textContent = 'Unable to load details for selected resource';
+    highlightsEl.innerHTML = '';
+    tagsEl.innerHTML = '<div class="empty-state" style="padding:12px 0">No data available</div>';
+    alertsEl.innerHTML = '';
+    timelineEl.innerHTML = '';
+    return;
+  }
+
+  if (activePanelKey !== resourceKey(resourceType, resourceId)) return;
+
+  renderResourcePanel(data);
+}
+
+function renderResourcePanel(data) {
+  const { resource, snapshots = [], alerts = [] } = data;
+  const titleEl = document.getElementById('resource-panel-title');
+  const metaEl = document.getElementById('resource-panel-meta');
+  const highlightsEl = document.getElementById('resource-panel-highlights');
+  const tagsEl = document.getElementById('resource-panel-tags');
+  const alertsEl = document.getElementById('resource-panel-alerts');
+  const timelineEl = document.getElementById('resource-panel-timeline');
+
+  titleEl.innerHTML = `${typeBadge(resource.resource_type)} <span style="margin-left:8px">${esc(resource.resource_name || resource.resource_id)}</span>`;
+  metaEl.innerHTML = `<span class="resource-id">${esc(resource.resource_id)}</span> · ${esc(resource.region || '—')} · ${esc(resource.account_id || '—')} · <span class="state-dot ${esc(stateClass(resource.state))}">${esc(resource.state || '—')}</span>`;
+
+  highlightsEl.innerHTML = `
+    <div class="detail-kpi-grid">
+      <div class="detail-kpi-card">
+        <div class="detail-kpi-label">Age</div>
+        <div class="detail-kpi-value">${ageFromISO(resource.created_at)}</div>
+      </div>
+      <div class="detail-kpi-card">
+        <div class="detail-kpi-label">Estimated Cost</div>
+        <div class="detail-kpi-value ${costClass(resource.estimated_cost_usd)}">${formatCost(resource.estimated_cost_usd)}</div>
+      </div>
+      <div class="detail-kpi-card">
+        <div class="detail-kpi-label">First Seen</div>
+        <div class="detail-kpi-value">${formatDate(resource.first_seen)}</div>
+      </div>
+      <div class="detail-kpi-card">
+        <div class="detail-kpi-label">Last Seen</div>
+        <div class="detail-kpi-value">${relativeTime(resource.last_seen)}</div>
+      </div>
+    </div>`;
+
+  if (resource.tags && Object.keys(resource.tags).length > 0) {
+    tagsEl.innerHTML = `<div style="display:flex;flex-wrap:wrap;gap:6px">${renderTags(resource.tags)}</div>`;
+  } else {
+    tagsEl.innerHTML = '<div class="empty-state" style="padding:12px 0">No tags on this resource</div>';
+  }
+
+  if (alerts.length === 0) {
+    alertsEl.innerHTML = '<div class="all-clear" style="justify-content:flex-start;padding:8px 0">No alerts for this resource</div>';
+  } else {
+    alertsEl.innerHTML = alerts.slice(0, 6).map((a) => `
+      <div class="alert-summary-item ${a.severity}" style="margin-bottom:8px;flex-direction:column;gap:6px;cursor:default">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          ${severityBadge(a.severity)}
+          <span style="font-size:0.78rem;color:var(--text-primary);font-weight:500">${esc(a.alert_type.replace(/_/g,' '))}</span>
+          <span style="font-size:0.7rem;color:var(--text-dim);margin-left:auto">${relativeTime(a.triggered_at)}</span>
+        </div>
+        <div style="font-size:0.76rem;color:var(--text-secondary);line-height:1.5">${esc(a.message || '')}</div>
+      </div>
+    `).join('');
+  }
+
+  if (!snapshots.length) {
+    timelineEl.innerHTML = '<div class="empty-state" style="padding:12px 0">Snapshot timeline not available for this view yet</div>';
+    return;
+  }
+
+  const rendered = [];
+  let prevState = null;
+  let prevTags = null;
+  snapshots.forEach((snap, i) => {
+    const isFirst = i === 0;
+    const isLast = i === snapshots.length - 1;
+    const stateChanged = snap.state !== prevState;
+    const tagsChanged = JSON.stringify(snap.tags) !== prevTags;
+    if (isFirst || isLast || stateChanged || tagsChanged) {
+      const badges = [];
+      if (isFirst) badges.push('<span class="timeline-badge new">FIRST</span>');
+      if (stateChanged && !isFirst) badges.push('<span class="timeline-badge change">STATE</span>');
+      if (tagsChanged && !isFirst) badges.push('<span class="timeline-badge change">TAGS</span>');
+      rendered.push({ snap, badges, isLast, idx: rendered.length });
+    }
+    prevState = snap.state;
+    prevTags = JSON.stringify(snap.tags);
+  });
+
+  timelineEl.innerHTML = rendered.map((item) => `
+    <div class="timeline-item ${item.isLast ? 'latest' : ''}" style="--i:${item.idx}">
+      <div class="timeline-time">${formatDate(item.snap.polled_at)}</div>
+      <div class="timeline-content">
+        <span class="state-dot ${esc(stateClass(item.snap.state))}">${esc(item.snap.state || '—')}</span>
+        ${item.badges.join('')}
+        ${item.isLast ? '<span style="font-size:0.7rem;color:var(--accent)">CURRENT</span>' : ''}
+      </div>
+    </div>
+  `).join('');
+}
+
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape') closeResourcePanel();
+});
 
 document.addEventListener('DOMContentLoaded', loadResources);
