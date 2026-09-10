@@ -73,6 +73,11 @@ A self-hosted tool that monitors your AWS account and gives you a unified view o
 | ECS Services | `list_clusters` + `list_services` + `describe_services` | Fargate vCPU/GB-hour model; EC2-backed cost shared by task fraction |
 | EKS Clusters | `list_clusters` + `describe_cluster` + `describe_nodegroup` | $0.10/hr control plane + nodes at first listed instance type only |
 | CloudFront Distributions | `list_distributions` + `list_tags_for_resource` | $0.01/day placeholder — not usage-based |
+| VPCs | `describe_vpcs` | $0; no hourly charge |
+| Subnets | `describe_subnets` | $0; no hourly charge |
+| Route Tables | `describe_route_tables` | $0; main/associated/unassociated derived from associations |
+| Internet Gateways | `describe_internet_gateways` | $0; attached/detached derived from VPC attachments |
+| VPC Endpoints | `describe_vpc_endpoints` | Gateway type $0; Interface/GWLB ~$0.01/hr baseline, no data-processing $/GB |
 
 > All cost figures are directional on-demand approximations (ap-south-1). They exclude data transfer, Reserved Instances / Savings Plans, Spot pricing, and free-tier credits. Always confirm in AWS Cost Explorer.
 

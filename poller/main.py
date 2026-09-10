@@ -19,6 +19,11 @@ from collectors.s3 import S3Collector
 from collectors.elastic_ips import ElasticIPCollector
 from collectors.load_balancers import LoadBalancerCollector
 from collectors.nat_gateways import NatGatewayCollector
+from collectors.vpc import VPCCollector
+from collectors.subnets import SubnetCollector
+from collectors.route_tables import RouteTableCollector
+from collectors.internet_gateways import InternetGatewayCollector
+from collectors.vpc_endpoints import VPCEndpointCollector
 from collectors.security_groups import SecurityGroupCollector
 from collectors.iam_users import IAMUserCollector
 from collectors.cloudwatch_alarms import CloudWatchAlarmCollector
@@ -76,6 +81,11 @@ def _get_collectors(session, account_id: str, region: str) -> list:
         S3Collector(session, account_id, region),
         LoadBalancerCollector(session, account_id, region),
         NatGatewayCollector(session, account_id, region),
+        VPCCollector(session, account_id, region),
+        SubnetCollector(session, account_id, region),
+        RouteTableCollector(session, account_id, region),
+        InternetGatewayCollector(session, account_id, region),
+        VPCEndpointCollector(session, account_id, region),
         ElasticIPCollector(session, account_id, region),
         SecurityGroupCollector(session, account_id, region),
         IAMUserCollector(session, account_id, region),

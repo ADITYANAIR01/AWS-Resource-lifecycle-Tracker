@@ -96,8 +96,8 @@ function stateRowClass(state) {
   if (!state) return '';
   const s = state.toLowerCase();
   if (['unused','unassociated','error','alarm','failed'].includes(s)) return 'state-critical';
-  if (['stopped','stopping','insufficient_data','pending','provisioning','deleting','inprogress'].includes(s)) return 'state-warning';
-  if (['running','available','active','associated','ok','in-use','deployed'].includes(s)) return 'state-success';
+  if (['stopped','stopping','insufficient_data','pending','provisioning','deleting','inprogress','detached'].includes(s)) return 'state-warning';
+  if (['running','available','active','associated','attached','main','ok','in-use','deployed'].includes(s)) return 'state-success';
   return 'state-info';
 }
 
@@ -119,6 +119,11 @@ function typeBadge(type) {
     cloudfront:'CF',
     load_balancer:'ELB',
     nat_gateway:'NAT',
+    vpc:'VPC',
+    subnet:'SUBNET',
+    route_table:'RT',
+    internet_gateway:'IGW',
+    vpc_endpoint:'VPCE',
   };
   return `<span class="type-badge ${type}">${labels[type] || type.toUpperCase()}</span>`;
 }
@@ -140,6 +145,11 @@ function formatTypeLabel(type) {
     cloudfront: 'CloudFront',
     load_balancer: 'Load Balancer',
     nat_gateway: 'NAT Gateway',
+    vpc: 'VPC',
+    subnet: 'Subnet',
+    route_table: 'Route Table',
+    internet_gateway: 'Internet Gateway',
+    vpc_endpoint: 'VPC Endpoint',
   };
   return labels[type] || String(type || 'unknown').replace(/_/g, ' ');
 }

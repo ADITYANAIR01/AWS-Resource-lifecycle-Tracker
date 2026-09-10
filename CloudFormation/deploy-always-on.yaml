@@ -1,6 +1,6 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: >
-  AWS Resource Lifecycle Tracker v0.1.0
+  AWS Resource Lifecycle Tracker v2.1.0
   Deploys: VPC, EC2 (t3.micro), RDS PostgreSQL (db.t3.micro),
   Secrets Manager, IAM Role, SNS, S3 + CloudFront snapshot viewer.
   Free tier compatible for 12 months on new AWS accounts.
@@ -386,6 +386,11 @@ Resources:
                   - ec2:DescribeSecurityGroups
                   - ec2:DescribeNatGateways
                   - ec2:DescribeNetworkInterfaces
+                  - ec2:DescribeVpcs
+                  - ec2:DescribeSubnets
+                  - ec2:DescribeRouteTables
+                  - ec2:DescribeInternetGateways
+                  - ec2:DescribeVpcEndpoints
                 Resource: "*"
               - Sid: ELBReadOnly
                 Effect: Allow

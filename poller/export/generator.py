@@ -431,6 +431,21 @@ def _overview_body() -> str:
          style="width:100%;justify-content:center">View all alerts →</a>
     </div>
   </div>
+</div>
+
+<div class="card" style="margin-top:16px">
+  <div class="card-accent-line"></div>
+  <div class="section-header">Coverage &amp; Cost Notes</div>
+  <div style="font-size:0.78rem;color:var(--text-dim);line-height:1.6">
+    Cost figures are directional on-demand (ap-south-1) approximations — always confirm in AWS Cost Explorer.
+    Load balancers cover ELBv2 only (ALB/NLB/GLB; classic ELB excluded).
+    CloudWatch covers MetricAlarms only (composite alarms excluded).
+    EKS node cost uses the first instance type when a nodegroup lists several.
+    Unassociated Elastic IPs show a 1-hour floor ($0.005) until duration accrues.
+    S3 cost shows $0 (storage not metered in v1); CloudFront shows a $0.01 placeholder.
+    VPC, subnets, route tables and internet gateways are $0 (inventory only).
+    VPC endpoints: Gateway type $0; Interface type ~$0.01/hr baseline (no data-processing).
+  </div>
 </div>"""
 
 
@@ -461,6 +476,11 @@ def _resources_body() -> str:
     <option value="ecs">ECS</option>
     <option value="eks">EKS</option>
     <option value="cloudfront">CloudFront</option>
+    <option value="vpc">VPC</option>
+    <option value="subnet">Subnet</option>
+    <option value="route_table">Route Table</option>
+    <option value="internet_gateway">Internet Gateway</option>
+    <option value="vpc_endpoint">VPC Endpoint</option>
   </select>
   <select class="filter-select" id="filter-state" onchange="applyFilters()">
     <option value="">All States</option>
@@ -471,6 +491,9 @@ def _resources_body() -> str:
     <option value="unused">Unused</option>
     <option value="associated">Associated</option>
     <option value="unassociated">Unassociated</option>
+    <option value="attached">Attached</option>
+    <option value="detached">Detached</option>
+    <option value="main">Main</option>
     <option value="active">Active</option>
     <option value="inactive">Inactive</option>
     <option value="pending">Pending</option>

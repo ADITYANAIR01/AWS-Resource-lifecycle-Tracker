@@ -69,6 +69,8 @@
     EKS node cost uses the first instance type when a nodegroup lists several.
     Unassociated Elastic IPs show a 1-hour floor ($0.005) until duration accrues.
     S3 cost shows $0 (storage not metered in v1); CloudFront shows a $0.01 placeholder.
+    VPC, subnets, route tables and internet gateways are $0 (inventory only).
+    VPC endpoints: Gateway type $0; Interface type ~$0.01/hr baseline (no data-processing).
   </div>
 </div>
 {% endblock %}

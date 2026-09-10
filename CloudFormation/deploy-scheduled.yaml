@@ -1,6 +1,6 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: >
-  AWS Resource Lifecycle Tracker v0.1.0 - Cost-Optimised Scheduled Mode
+  AWS Resource Lifecycle Tracker v2.1.0 - Cost-Optimised Scheduled Mode
   Polls twice a week (Mon + Thu). EC2 and RDS auto-stop after each poll.
   Elastic IP keeps dashboard URL stable across stop/start cycles.
   CloudFront SnapshotURL always accessible between polls.
@@ -428,6 +428,11 @@ Resources:
                   - ec2:DescribeSecurityGroups
                   - ec2:DescribeNatGateways
                   - ec2:DescribeNetworkInterfaces
+                  - ec2:DescribeVpcs
+                  - ec2:DescribeSubnets
+                  - ec2:DescribeRouteTables
+                  - ec2:DescribeInternetGateways
+                  - ec2:DescribeVpcEndpoints
                 Resource: "*"
               - Sid: ELBReadOnly
                 Effect: Allow

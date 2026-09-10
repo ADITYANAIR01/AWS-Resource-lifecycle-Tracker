@@ -111,6 +111,7 @@ ALB_HOURLY_RATE = Decimal("0.0270")
 NLB_HOURLY_RATE = Decimal("0.0250")
 GLB_HOURLY_RATE = Decimal("0.0125")
 NAT_GATEWAY_HOURLY_RATE = Decimal("0.0500")
+VPC_ENDPOINT_INTERFACE_HOURLY_RATE = Decimal("0.0100")
 
 
 # ---------------------------------------------------------------------------
@@ -260,3 +261,21 @@ def estimate_eks_nodegroup_cost(
 
     per_node_cost = estimate_ec2_cost(instance_type, created_at)
     return round(per_node_cost * Decimal(str(desired_size)), 4)
+
+
+def estimate_vpc_endpoint_cost(endpoint_type: str, created_at: datetime) -> Decimal:
+    """
+    Estimate VPC endpoint base hourly cost.
+
+    Notes:
+        - Gateway endpoints (S3/DynamoDB) have no hourly charge.
+        - Interface / GatewayLoadBalancer endpoints incur an hourly
+          charge per endpoint (data processing excluded).
+        - Intended for directional visibility, not exact billing parity.
+    """
+    ep_key = (endpoint_type or "Gateway").lower()
+    if ep_key == "gateway":
+        return Decimal("0")
+    return round(
+        VPC_ENDPOINT_INTERFACE_HOURLY_RATE * _hours_since(created_at), 4
+    )

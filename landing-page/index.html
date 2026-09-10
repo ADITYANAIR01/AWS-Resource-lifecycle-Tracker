@@ -617,7 +617,7 @@ footer{
       <span class="accent">Before it costs you.</span>
     </h1>
     <p class="hero-sub">
-      Track all 15 AWS resource types, get intelligent alerts, generate static snapshots — and deploy for under $1/month.
+      Track all 20 AWS resource types, get intelligent alerts, generate static snapshots — and deploy for under $1/month.
     </p>
     <div class="hero-actions">
       <a href="#deploy" class="btn btn-primary">
@@ -706,7 +706,7 @@ footer{
             </div>
             <div>
               <div class="sim-logo-text">AWS TRACKER</div>
-              <div style="font-family:var(--font-mono);font-size:.58rem;color:var(--text3)">v0.1.0</div>
+              <div style="font-family:var(--font-mono);font-size:.58rem;color:var(--text3)">v2.1.0</div>
             </div>
           </div>
           <div class="sim-nav-item active" data-tab="overview" onclick="switchSimTab('overview', this)">◈ Overview</div>
@@ -735,7 +735,7 @@ footer{
     <div class="demo-header reveal">
       <div class="section-tag">Coverage</div>
       <h2>What gets tracked</h2>
-      <p>15 AWS resource types supported today. Click <strong style="color:var(--accent)">View Info</strong> to see what data is collected for each.</p>
+      <p>20 AWS resource types supported today. Click <strong style="color:var(--accent)">View Info</strong> to see what data is collected for each.</p>
     </div>
 
     <div class="services-grid reveal" id="services-grid">
@@ -868,11 +868,14 @@ footer{
         </div>
       </div>
 
-      <div class="service-card future">
-        <div class="service-icon" style="background:rgba(30,41,59,.5);color:var(--text3)">⚖</div>
-        <div class="service-name" style="color:var(--text2)">Load Balancers</div>
-        <div class="service-desc" style="color:var(--text3)">ALB/NLB, target groups, listener rules, idle detection.</div>
-        <span class="service-badge future">Future Integration</span>
+      <div class="service-card supported">
+        <div class="service-icon" style="background:rgba(56,189,248,.08);color:#38bdf8">⚖</div>
+        <div class="service-name">Load Balancers</div>
+        <div class="service-desc">ALB/NLB/GLB state, type, age, base hourly cost.</div>
+        <span class="service-badge live" onclick="toggleInfo(this)">View Info</span>
+        <div class="service-info-panel">
+          Collects via <code>describe_load_balancers</code> + <code>describe_tags</code> (ELBv2 only — classic ELB excluded). Tracks type, scheme, VPC, state, creation time, base hourly cost. Alerts on long-active load balancers.
+        </div>
       </div>
 
       <div class="service-card future">
@@ -889,6 +892,66 @@ footer{
         <span class="service-badge live" onclick="toggleInfo(this)">View Info</span>
         <div class="service-info-panel">
           Collects via <code>list_distributions</code> + <code>list_tags_for_resource</code>. Tracks distribution domain, status, enabled/disabled state, origins, and global region metadata.
+        </div>
+      </div>
+
+      <div class="service-card supported">
+        <div class="service-icon" style="background:rgba(45,212,191,.08);color:#2dd4bf">🧭</div>
+        <div class="service-name">NAT Gateways</div>
+        <div class="service-desc">State, subnet/VPC mapping, base hourly cost.</div>
+        <span class="service-badge live" onclick="toggleInfo(this)">View Info</span>
+        <div class="service-info-panel">
+          Collects via <code>describe_nat_gateways</code>. Tracks state, subnet, VPC, connectivity type, public/private IPs, creation time, base hourly cost. Alerts on long-active gateways (high idle cost).
+        </div>
+      </div>
+
+      <div class="service-card supported">
+        <div class="service-icon" style="background:rgba(34,211,238,.08);color:#22d3ee">☁</div>
+        <div class="service-name">VPCs</div>
+        <div class="service-desc">CIDR, default flag, state, full tag inventory.</div>
+        <span class="service-badge live" onclick="toggleInfo(this)">View Info</span>
+        <div class="service-info-panel">
+          Collects via <code>describe_vpcs</code>. Tracks CIDR block, state, default-VPC flag, DHCP options, tenancy. No hourly charge — tracked for inventory and dependency mapping.
+        </div>
+      </div>
+
+      <div class="service-card supported">
+        <div class="service-icon" style="background:rgba(103,232,249,.08);color:#67e8f9">🧩</div>
+        <div class="service-name">Subnets</div>
+        <div class="service-desc">CIDR, AZ, VPC mapping, available IPs.</div>
+        <span class="service-badge live" onclick="toggleInfo(this)">View Info</span>
+        <div class="service-info-panel">
+          Collects via <code>describe_subnets</code>. Tracks CIDR block, availability zone, VPC, available IP count, default-for-AZ flag. No hourly charge.
+        </div>
+      </div>
+
+      <div class="service-card supported">
+        <div class="service-icon" style="background:rgba(125,211,252,.08);color:#7dd3fc">🗺</div>
+        <div class="service-name">Route Tables</div>
+        <div class="service-desc">Main/associated status, VPC mapping, route counts.</div>
+        <span class="service-badge live" onclick="toggleInfo(this)">View Info</span>
+        <div class="service-info-panel">
+          Collects via <code>describe_route_tables</code>. State derived from associations: main, associated, or unassociated (unused custom table). No hourly charge.
+        </div>
+      </div>
+
+      <div class="service-card supported">
+        <div class="service-icon" style="background:rgba(186,230,253,.08);color:#bae6fd">🚪</div>
+        <div class="service-name">Internet Gateways</div>
+        <div class="service-desc">VPC attachments, detached-gateway detection.</div>
+        <span class="service-badge live" onclick="toggleInfo(this)">View Info</span>
+        <div class="service-info-panel">
+          Collects via <code>describe_internet_gateways</code>. State derived from attachments: attached or detached (unused, safe to delete). No hourly charge.
+        </div>
+      </div>
+
+      <div class="service-card supported">
+        <div class="service-icon" style="background:rgba(14,165,233,.08);color:#0ea5e9">🔌</div>
+        <div class="service-name">VPC Endpoints</div>
+        <div class="service-desc">Gateway vs Interface type, service, hourly cost.</div>
+        <span class="service-badge live" onclick="toggleInfo(this)">View Info</span>
+        <div class="service-info-panel">
+          Collects via <code>describe_vpc_endpoints</code>. Tracks endpoint type, service name, VPC, state. Gateway endpoints (S3/DynamoDB) are free; Interface endpoints estimated at ~$0.01/hr baseline.
         </div>
       </div>
 
@@ -1343,7 +1406,7 @@ const personas = {
     lastPoll: '1min ago',
     url: 'https://tracker.startup.io',
     stats: {
-      resources: {val: 47, color: 'var(--text)', sub: '15 resource types'},
+      resources: {val: 47, color: 'var(--text)', sub: '20 resource types'},
       alerts: {val: 8, color: 'var(--red)', sub: '2 critical · 6 warning'},
       cost: {val: '$3.40', color: 'var(--amber)', sub: 'this month'},
       poll: {val: 'SUCCESS', color: 'var(--green)', sub: 'run #61 · 7.2s'},
@@ -1373,7 +1436,7 @@ const personas = {
     lastPoll: 'just now',
     url: 'https://aws-tracker.corp.internal',
     stats: {
-      resources: {val: 134, color: 'var(--text)', sub: '15 resource types'},
+      resources: {val: 134, color: 'var(--text)', sub: '20 resource types'},
       alerts: {val: 17, color: 'var(--red)', sub: '3 critical · 14 others'},
       cost: {val: '$12.40', color: 'var(--red)', sub: 'this month'},
       poll: {val: 'PARTIAL', color: 'var(--amber)', sub: 'run #244 · 14.3s'},
@@ -1575,8 +1638,8 @@ window.addEventListener('scroll', () => {
 
 // ── INIT ──
 window.addEventListener('load', () => {
-  animateCount('count-resources', 15);
-  animateCount('count-alerts', 13);
+  animateCount('count-resources', 20);
+  animateCount('count-alerts', 15);
   animateCount('count-cost', 0.54);
   animateCount('count-deploy', 15);
   renderDashboard(currentPersona, currentSimTab);

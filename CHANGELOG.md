@@ -2,6 +2,27 @@
 
 All notable changes to this project will be documented here.
 
+## [2.1.0] — 2026-09-10
+
+### Added
+
+- **Collectors:** Added 5 VPC networking collectors — `vpc`, `subnet`, `route_table`, `internet_gateway`, `vpc_endpoint` — expanding coverage from 15 to 20 resource types.
+- **Cost Estimation:** Added VPC endpoint cost estimator (Gateway type $0; Interface/GWLB ~$0.01/hr baseline, no data-processing $/GB).
+- **CloudFormation:** Added 5 `ec2:Describe*` permissions (`DescribeVpcs`, `DescribeSubnets`, `DescribeRouteTables`, `DescribeInternetGateways`, `DescribeVpcEndpoints`) to both `deploy-always-on.yaml` and `deploy-scheduled.yaml`.
+- **DB Migration:** Added migration `001_iam_last_activity.sql` for IAM `last_activity_at` tracking.
+- **Testing:** Added 8 regression tests covering upsert clock, IAM rule SQL, SG fail-closed, pagination clamp, cost floors, version fallback, SQL-fstring gate, and env fallback.
+
+### Changed
+
+- **Alert Rules:** Rewrote IAM inactivity rule to measure `last_activity_at` with NULL-suppress semantics (NULL = no alert).
+- **API:** Clamped pagination `page_size` to 1..500 with safe parsing plus detail response caps.
+- **UI/UX:** Made sidebar and static snapshot version dynamic via `_read_app_version()` reading the `VERSION` file.
+- **Docs:** Refreshed landing page to 20-type coverage and fixed Load Balancers card (was Future Integration, now live ELBv2).
+
+### Fixed
+
+- **Security Groups:** Fail-closed on ENI describe errors (None sentinel + raise) instead of marking every SG unused.
+
 ## [2.0.0] — 2026-04-18
 
 ### Added
