@@ -6,8 +6,6 @@ import os
 import sys
 from pathlib import Path
 import pytest
-from decimal import Decimal
-from datetime import datetime, timezone
 
 # Add project root to Python path
 project_root = Path(__file__).parent.parent

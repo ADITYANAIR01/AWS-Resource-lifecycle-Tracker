@@ -160,9 +160,59 @@ def update_poller_run(
 def insert_or_update_resource(conn, resource: dict) -> str:
     tags_json = Json(resource.get("tags") or {})
 
-    with conn.cursor() as cur:
-        cur.execute(
-            """
+    # Clock contract (see ADR note in alerts/rules.py header):
+    #   - last_seen moves on EVERY upsert (liveness heartbeat).
+    #   - last_modified moves ONLY when state changes (CASE below). A
+    #     tag-only or cost-only upsert must NOT move last_modified, or the
+    #     four last_modified age rules (ec2_stopped_too_long, ebs_unattached,
+    #     rds_stopped_too_long, cloudwatch_alarm_stale) would see tag drift
+    #     as fresh activity. Never set last_modified = NOW() unconditionally.
+    #   - last_activity_at is the domain activity clock (currently only the
+    #     IAM collector sets it). It is written through verbatim (nullable)
+    #     and never derived here.
+    query_with_activity = """
+            INSERT INTO resources (
+                resource_id, resource_type, resource_name,
+                account_id, region, state, created_at,
+                first_seen, last_seen, last_modified, last_activity_at,
+                tags, estimated_cost_usd, is_active
+            ) VALUES (
+                %s, %s, %s, %s, %s, %s, %s,
+                NOW(), NOW(), NOW(), %s,
+                %s, %s, TRUE
+            )
+            ON CONFLICT (resource_id, resource_type) DO UPDATE SET
+                resource_name      = EXCLUDED.resource_name,
+                state              = EXCLUDED.state,
+                last_seen          = NOW(),
+                last_modified      = CASE
+                    WHEN resources.state IS DISTINCT FROM EXCLUDED.state
+                    THEN NOW()
+                    ELSE resources.last_modified
+                END,
+                last_activity_at   = EXCLUDED.last_activity_at,
+                tags               = EXCLUDED.tags,
+                estimated_cost_usd = EXCLUDED.estimated_cost_usd,
+                is_active          = TRUE,
+                deleted_at         = NULL
+            RETURNING (xmax = 0) AS was_inserted
+        """
+    params_with_activity = (
+        resource["resource_id"],
+        resource["resource_type"],
+        resource.get("resource_name"),
+        resource["account_id"],
+        resource["region"],
+        resource.get("state"),
+        resource.get("created_at"),
+        resource.get("last_activity_at"),
+        tags_json,
+        resource.get("estimated_cost_usd", Decimal("0")),
+    )
+
+    # Legacy query for DBs where migration 001 has not been applied yet
+    # (no last_activity_at column). Identical except the column is omitted.
+    query_legacy = """
             INSERT INTO resources (
                 resource_id, resource_type, resource_name,
                 account_id, region, state, created_at,
@@ -187,21 +237,37 @@ def insert_or_update_resource(conn, resource: dict) -> str:
                 is_active          = TRUE,
                 deleted_at         = NULL
             RETURNING (xmax = 0) AS was_inserted
-        """,
-            (
-                resource["resource_id"],
-                resource["resource_type"],
-                resource.get("resource_name"),
-                resource["account_id"],
-                resource["region"],
-                resource.get("state"),
-                resource.get("created_at"),
-                tags_json,
-                resource.get("estimated_cost_usd", Decimal("0")),
-            ),
-        )
+        """
+    params_legacy = (
+        resource["resource_id"],
+        resource["resource_type"],
+        resource.get("resource_name"),
+        resource["account_id"],
+        resource["region"],
+        resource.get("state"),
+        resource.get("created_at"),
+        tags_json,
+        resource.get("estimated_cost_usd", Decimal("0")),
+    )
 
-        was_inserted = cur.fetchone()[0]
+    with conn.cursor() as cur:
+        try:
+            cur.execute(query_with_activity, params_with_activity)
+            was_inserted = cur.fetchone()[0]
+        except Exception as e:
+            # Backward compat: old DB without the 001 column raises
+            # UndefinedColumn mentioning last_activity_at. Roll back the
+            # failed statement and retry the legacy shape. Any other
+            # error is re-raised unchanged.
+            if "last_activity_at" not in str(e).lower():
+                raise
+            conn.rollback()
+            logger.warning(
+                "resources.last_activity_at missing (migration 001 not applied) "
+                "— falling back to legacy upsert without activity clock"
+            )
+            cur.execute(query_legacy, params_legacy)
+            was_inserted = cur.fetchone()[0]
         conn.commit()
         return "inserted" if was_inserted else "updated"
 

@@ -66,6 +66,11 @@ class IAMUserCollector(BaseCollector):
                             "region": "global",
                             "state": state,
                             "created_at": create_time,
+                            # Real activity clock (console login / access-key
+                            # last used). Persisted to resources.last_activity_at
+                            # by insert_or_update_resource; the iam_user_inactive
+                            # rule measures this column, NOT last_modified.
+                            "last_activity_at": last_activity,
                             "tags": tags,
                             "estimated_cost_usd": 0,
                             "raw_api_response": {

@@ -193,7 +193,8 @@ def run_poll_cycle(session, account_id: str, region: str) -> None:
         total_deleted = 0
         all_errors = []
 
-        for collector in _get_collectors(session, account_id, region):
+        collectors = _get_collectors(session, account_id, region)
+        for collector in collectors:
             logger.info(f"Running collector: {collector.RESOURCE_TYPE}")
             counts = _run_collector(collector, conn)
             total_found += counts["found"]
@@ -202,7 +203,7 @@ def run_poll_cycle(session, account_id: str, region: str) -> None:
             total_deleted += counts["deleted"]
             all_errors += counts["errors"]
 
-        collectors_count = len(_get_collectors(session, account_id, region))
+        collectors_count = len(collectors)
         if len(all_errors) == 0:
             status = "success"
         elif len(all_errors) < collectors_count:

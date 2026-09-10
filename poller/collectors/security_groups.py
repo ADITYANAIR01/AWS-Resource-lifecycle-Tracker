@@ -32,8 +32,18 @@ class SecurityGroupCollector(BaseCollector):
         self.logger.info("Collecting Security Groups")
 
         try:
-            # Step 1 — Build set of all SG IDs currently in use
+            # Step 1 — Build set of all SG IDs currently in use.
+            # Fail-CLOSED: _get_in_use_sg_ids returns None when the ENI
+            # lookup fails, and we raise so the poller records this
+            # collector in the partial_failure path instead of marking
+            # every SG "unused" (which would spam security_group_unused
+            # alerts). See _get_in_use_sg_ids docstring.
             in_use_sg_ids = self._get_in_use_sg_ids(client)
+            if in_use_sg_ids is None:
+                raise RuntimeError(
+                    "ENI lookup failed — cannot determine SG attachment; "
+                    "aborting SG collection (fail-closed)"
+                )
             self.logger.info(
                 f"Found {len(in_use_sg_ids)} security group(s) currently in use"
             )
@@ -78,10 +88,18 @@ class SecurityGroupCollector(BaseCollector):
         self.logger.info(f"Collected {len(resources)} security group(s)")
         return resources
 
-    def _get_in_use_sg_ids(self, client) -> set:
+    def _get_in_use_sg_ids(self, client) -> set | None:
         """
         Return a set of SG IDs that are currently attached to
         at least one network interface.
+
+        Returns None (sentinel) when the ENI lookup fails, so the
+        caller can fail CLOSED by raising into the poller's
+        partial_failure path. Never return an empty set on failure:
+        an empty set would mark every non-default SG "unused" and
+        trigger bogus security_group_unused alerts (fail-open bug).
+        A genuinely empty result (account with no ENIs) still
+        returns an empty set — only exceptions yield None.
         """
         in_use = set()
         try:
@@ -95,6 +113,8 @@ class SecurityGroupCollector(BaseCollector):
         except Exception as e:
             self.logger.warning(
                 f"Could not fetch network interfaces for SG in-use check: {e}. "
-                f"All SGs will be marked as unknown state."
+                f"Fail-closed: returning None so collection aborts instead of "
+                f"marking all SGs unused."
             )
+            return None
         return in_use

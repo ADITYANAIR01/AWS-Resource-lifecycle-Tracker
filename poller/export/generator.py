@@ -50,6 +50,34 @@ _CSS_PATH = os.path.join(_STATIC_DIR, "css", "dashboard.css")
 _JS_DIR = os.path.join(_STATIC_DIR, "js")
 
 
+def _read_app_version() -> str:
+    """Read VERSION file. Never raises — falls back to 'unknown'."""
+    candidates = [
+        os.environ.get("APP_VERSION", ""),
+        os.path.abspath(
+            os.path.join(os.path.dirname(__file__), "..", "..", "VERSION")
+        ),
+        os.path.join(os.getcwd(), "VERSION"),
+    ]
+    for candidate in candidates:
+        if not candidate:
+            continue
+        if os.path.isfile(candidate):
+            try:
+                with open(candidate, "r", encoding="utf-8") as f:
+                    value = f.read().strip()
+                if value:
+                    return value
+            except OSError:
+                continue
+        elif "/" not in candidate and "\\" not in candidate:
+            return candidate.strip() or "unknown"
+    return "unknown"
+
+
+_APP_VERSION = _read_app_version()
+
+
 # ---------------------------------------------------------------------------
 # JSON serializer — handles datetime, Decimal
 # ---------------------------------------------------------------------------
@@ -311,7 +339,7 @@ def _build_page(
         </div>
         <div class="logo-text">
           <span class="logo-title">AWS TRACKER</span>
-          <span class="logo-version">v0.1.0 · snapshot</span>
+          <span class="logo-version">v{_APP_VERSION} · snapshot</span>
         </div>
       </div>
       <div class="sidebar-divider"></div>
@@ -372,7 +400,7 @@ def _overview_body() -> str:
     <div class="card-accent-line"></div>
     <div class="card-label">Est. Total Cost</div>
     <div class="card-value mono" id="stat-cost">—</div>
-    <div class="card-sub">On-demand pricing only</div>
+    <div class="card-sub">On-demand pricing only · approximations (S3 $0, CF placeholder, EIP floor)</div>
   </div>
   <div class="card" id="card-poll">
     <div class="card-accent-line"></div>

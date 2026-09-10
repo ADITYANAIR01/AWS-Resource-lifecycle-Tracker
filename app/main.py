@@ -27,6 +27,42 @@ logger = logging.getLogger("app.main")
 app = Flask(__name__, static_folder="static", template_folder="templates")
 auth = HTTPBasicAuth()
 
+def _read_app_version() -> str:
+    """Read VERSION file. Never raises — falls back to 'unknown'."""
+    candidates = [
+        os.environ.get("APP_VERSION", ""),
+        os.path.join(os.path.dirname(__file__), "..", "VERSION"),
+        os.path.join(os.getcwd(), "VERSION"),
+    ]
+    for candidate in candidates:
+        if not candidate:
+            continue
+        # Plain version string (env override) vs file path
+        if os.path.isfile(candidate):
+            try:
+                with open(candidate, "r", encoding="utf-8") as f:
+                    value = f.read().strip()
+                if value:
+                    return value
+            except OSError:
+                continue
+        elif "/" not in candidate and "\\" not in candidate:
+            return candidate.strip() or "unknown"
+    return "unknown"
+
+
+APP_VERSION = _read_app_version()
+
+
+@app.context_processor
+def inject_env_meta():
+    return {
+        "app_version": APP_VERSION,
+        "aws_account_id": os.environ.get("AWS_ACCOUNT_ID", "—"),
+        "aws_region": os.environ.get("AWS_REGION", "—"),
+    }
+
+
 DASHBOARD_USER = os.environ.get("DASHBOARD_USER", "admin")
 DASHBOARD_PASSWORD = os.environ.get("DASHBOARD_PASSWORD", "")
 

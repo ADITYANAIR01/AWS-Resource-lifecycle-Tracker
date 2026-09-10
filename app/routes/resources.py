@@ -19,8 +19,16 @@ def resource_detail_page(resource_type, resource_id):
 def list_resources():
     try:
         conn = get_connection()
-        page_size = int(request.args.get("page_size", 100))
-        page = max(1, int(request.args.get("page", 1)))
+        try:
+            page_size = int(request.args.get("page_size", 100))
+        except (TypeError, ValueError):
+            page_size = 100
+        try:
+            page = int(request.args.get("page", 1))
+        except (TypeError, ValueError):
+            page = 1
+        page = max(1, page)
+        page_size = max(1, min(page_size, 500))
         offset = (page - 1) * page_size
 
         filter_type = request.args.get("type")
@@ -112,6 +120,7 @@ def get_resource(resource_type, resource_id):
                 FROM resource_snapshots
                 WHERE resource_id = %s AND resource_type = %s
                 ORDER BY polled_at ASC
+                LIMIT 500
             """,
                 (resource_id, resource_type),
             )
@@ -127,10 +136,11 @@ def get_resource(resource_type, resource_id):
             cur.execute(
                 """
                 SELECT id, alert_type, severity, message,
-                       triggered_at, resolved_at, acknowledged
+                        triggered_at, resolved_at, acknowledged
                 FROM alerts
                 WHERE resource_id = %s AND resource_type = %s
                 ORDER BY triggered_at DESC
+                LIMIT 200
             """,
                 (resource_id, resource_type),
             )

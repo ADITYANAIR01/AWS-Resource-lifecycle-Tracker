@@ -24,7 +24,7 @@
         <div class="logo-icon">⬡</div>
         <div class="logo-text">
           <span class="logo-title">AWS TRACKER</span>
-          <span class="logo-version">v0.1.0</span>
+          <span class="logo-version">v{{ app_version }}</span>
         </div>
       </div>
       <div class="sidebar-divider"></div>
@@ -49,11 +49,11 @@
       <div class="sidebar-meta">
         <div class="meta-section">
           <span class="meta-label">Account</span>
-          <span class="meta-value mono">121490076448</span>
+          <span class="meta-value mono">{{ aws_account_id }}</span>
         </div>
         <div class="meta-section">
           <span class="meta-label">Region</span>
-          <span class="meta-value mono">ap-south-1</span>
+          <span class="meta-value mono">{{ aws_region }}</span>
         </div>
         <div class="meta-section">
           <span class="meta-label">Last Poll</span>

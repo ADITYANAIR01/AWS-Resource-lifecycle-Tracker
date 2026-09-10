@@ -56,23 +56,25 @@ A self-hosted tool that monitors your AWS account and gives you a unified view o
 
 ## What It Tracks
 
-| Resource | API Used |
-| --- | --- |
-| EC2 Instances | `describe_instances` |
-| EBS Volumes | `describe_volumes` |
-| EBS Snapshots | `describe_snapshots` |
-| RDS Instances | `describe_db_instances` |
-| RDS Snapshots | `describe_db_snapshots` |
-| S3 Buckets | `list_buckets` + `get_bucket_tagging` |
-| Elastic Load Balancers (ALB/NLB/GLB) | `describe_load_balancers` + `describe_tags` |
-| NAT Gateways | `describe_nat_gateways` |
-| Elastic IPs | `describe_addresses` |
-| Security Groups | `describe_security_groups` |
-| IAM Users | `list_users` + `get_access_key_last_used` |
-| CloudWatch Alarms | `describe_alarms` |
-| ECS Services | `list_clusters` + `list_services` + `describe_services` |
-| EKS Clusters | `list_clusters` + `describe_cluster` + `describe_nodegroup` |
-| CloudFront Distributions | `list_distributions` + `list_tags_for_resource` |
+| Resource | API Used | Coverage / Cost Honesty |
+| --- | --- | --- |
+| EC2 Instances | `describe_instances` | On-demand ap-south-1 rates; unknown types → $0 |
+| EBS Volumes | `describe_volumes` | Monthly GB-prorated; unknown types → $0 |
+| EBS Snapshots | `describe_snapshots` | $0.05/GB-month prorated |
+| RDS Instances | `describe_db_instances` | On-demand rates; unknown classes → $0 |
+| RDS Snapshots | `describe_db_snapshots` | Age-based placeholder |
+| S3 Buckets | `list_buckets` + `get_bucket_tagging` | Cost N/A → tracked at $0 (Storage Lens required) |
+| Elastic Load Balancers (ALB/NLB/GLB) | `describe_load_balancers` + `describe_tags` | ELBv2 only — classic ELB excluded; base hourly only, no LCU charges |
+| NAT Gateways | `describe_nat_gateways` | Base hourly only, no data-processing $/GB |
+| Elastic IPs | `describe_addresses` | Unassociated only billed; 1-hour $0.005 floor until duration accrues |
+| Security Groups | `describe_security_groups` | $0; ENI-based in-use check, fail-closed on ENI errors |
+| IAM Users | `list_users` + `get_access_key_last_used` | $0; inactivity via `last_activity_at` (migration 001), NULL = no alert |
+| CloudWatch Alarms | `describe_alarms` | MetricAlarms only — composite alarms excluded; $0 |
+| ECS Services | `list_clusters` + `list_services` + `describe_services` | Fargate vCPU/GB-hour model; EC2-backed cost shared by task fraction |
+| EKS Clusters | `list_clusters` + `describe_cluster` + `describe_nodegroup` | $0.10/hr control plane + nodes at first listed instance type only |
+| CloudFront Distributions | `list_distributions` + `list_tags_for_resource` | $0.01/day placeholder — not usage-based |
+
+> All cost figures are directional on-demand approximations (ap-south-1). They exclude data transfer, Reserved Instances / Savings Plans, Spot pricing, and free-tier credits. Always confirm in AWS Cost Explorer.
 
 ---
 

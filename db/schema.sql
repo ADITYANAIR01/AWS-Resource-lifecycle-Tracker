@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS resources (
     first_seen          TIMESTAMP       NOT NULL DEFAULT NOW(),
     last_seen           TIMESTAMP       NOT NULL DEFAULT NOW(),
     last_modified       TIMESTAMP,
+    last_activity_at    TIMESTAMP,
     tags                JSONB           NOT NULL DEFAULT '{}',
     estimated_cost_usd  DECIMAL(10,4)   NOT NULL DEFAULT 0,
     is_active           BOOLEAN         NOT NULL DEFAULT TRUE,
@@ -70,6 +71,7 @@ CREATE INDEX IF NOT EXISTS idx_resources_type        ON resources(resource_type)
 CREATE INDEX IF NOT EXISTS idx_resources_active      ON resources(is_active);
 CREATE INDEX IF NOT EXISTS idx_resources_account     ON resources(account_id);
 CREATE INDEX IF NOT EXISTS idx_resources_type_active ON resources(resource_type, is_active);
+CREATE INDEX IF NOT EXISTS idx_resources_iam_last_activity ON resources(resource_type, last_activity_at) WHERE resource_type = 'iam_user';
 CREATE INDEX IF NOT EXISTS idx_snapshots_resource    ON resource_snapshots(resource_id, resource_type);
 CREATE INDEX IF NOT EXISTS idx_snapshots_polled_at   ON resource_snapshots(polled_at);
 CREATE INDEX IF NOT EXISTS idx_alerts_resource       ON alerts(resource_id, resource_type);

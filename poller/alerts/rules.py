@@ -11,6 +11,26 @@ Each rule is a dict:
 
 All thresholds read from environment variables with safe defaults.
 Changing thresholds requires only a .env update — no code change.
+
+Clock + casing contract (audited — do not "simplify"):
+  - last_modified moves ONLY on state change (see insert_or_update_resource
+    CASE). The four last_modified age rules below (ec2_stopped_too_long,
+    ebs_unattached, rds_stopped_too_long, cloudwatch_alarm_stale) therefore
+    measure time-in-state, immune to tag/cost drift. Never rewrite them to
+    last_seen or unconditional NOW().
+  - iam_user_inactive measures last_activity_at (real IAM activity clock
+    written by the IAM collector, migration 001). Rows with NULL activity
+    are SUPPRESSED (IS NOT NULL guard) — unknown activity must not alert.
+  - State casing: collectors normalise before storing, rules match exactly.
+    Lowercase family: ec2 running/stopped, ebs_volume available, rds
+    stopped, elastic_ip associated/unassociated, security_group in-use/unused.
+    Uppercase family (collector applies .upper(), rules use UPPERCASE):
+    cloudwatch_alarm INSUFFICIENT_DATA (raw StateValue), eks PENDING
+    (collector uppercases describe_cluster status; if AWS never emits
+    PENDING the rule safely never fires), ecs counts-based (no state match).
+    Keep rule literals in sync with collector normalisation.
+  - Interval params use make_interval(unit => %s) with a plain %s param —
+    never INTERVAL '%s days' string interpolation.
 """
 
 import os
@@ -161,16 +181,23 @@ ALERT_RULES = [
     {
         "type": "iam_user_inactive",
         "severity": "warning",
+        # Measures the real activity clock (migration 001,
+        # resources.last_activity_at, written by the IAM collector from
+        # console login / access-key last-used), NOT the row's last_modified.
+        # NULL-suppress: users with no observed activity never match, so
+        # backfill gaps and never-logged-in service accounts don't alert.
+        # Requires migration 001 — on an old DB this rule errors per-cycle
+        # and logs via the evaluator instead of firing (fail-silent per
+        # rule, never crash the poll). Interval via make_interval(days => %s)
+        # with a plain int param (no INTERVAL '%s days' interpolation).
         "query": """
             SELECT resource_id, resource_type, resource_name,
                    account_id, region
             FROM resources
             WHERE resource_type = 'iam_user'
               AND is_active     = TRUE
-              AND (
-                  last_modified IS NULL
-                  OR last_modified < NOW() - INTERVAL '%s days'
-              )
+              AND last_activity_at IS NOT NULL
+              AND last_activity_at < NOW() - make_interval(days => %s)
         """,
         "get_params": lambda: (_days("ALERT_IAM_INACTIVE_DAYS", 90),),
         "message_fn": lambda row: (
